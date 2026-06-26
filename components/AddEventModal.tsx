@@ -22,6 +22,10 @@ const inputClass =
   'w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm ' +
   'focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600 transition-colors'
 
+const inlineInputClass =
+  'bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm ' +
+  'focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600 transition-colors'
+
 const labelClass = 'block text-zinc-500 text-xs uppercase tracking-wider mb-1'
 
 export default function AddEventModal({ lat, lng, token, onSubmit, onClose, initialEvent, prefillVenue }: Props) {
@@ -243,13 +247,13 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
                       value={entry.name}
                       onChange={(e) => setLineup((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
                       placeholder="DJ / Artist name"
-                      className={inputClass + ' flex-1'}
+                      className={inlineInputClass + ' flex-1 min-w-0'}
                     />
                     <input
                       type="time"
                       value={entry.time ?? ''}
                       onChange={(e) => setLineup((prev) => prev.map((x, j) => j === i ? { ...x, time: e.target.value } : x))}
-                      className={inputClass + ' w-28'}
+                      className={inlineInputClass + ' w-28 shrink-0'}
                       style={{ colorScheme: 'dark' }}
                     />
                     <button
