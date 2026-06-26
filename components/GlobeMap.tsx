@@ -42,6 +42,8 @@ function toGeoJSON(events: MapEvent[]) {
         lat: e.lat,
         lng: e.lng,
         source: e.source,
+        ticketLink: e.ticketLink ?? null,
+        websiteLink: e.websiteLink ?? null,
       },
     })),
   }
@@ -60,9 +62,6 @@ export default function GlobeMap() {
   const panelRef = useRef<HTMLDivElement>(null)
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ''
   const [pendingEdit, setPendingEdit] = useState<MapEvent | null>(null)
-  const userEventsRef = useRef(userEvents)
-  userEventsRef.current = userEvents
-  const lastClickRef = useRef<{ time: number; id: string | null }>({ time: 0, id: null })
 
   const allEvents = useMemo<MapEvent[]>(
     () => [
@@ -217,22 +216,10 @@ export default function GlobeMap() {
         )
       })
 
-      // ── Click / double-click: individual point ──────────────────────────
+      // ── Click: individual point ─────────────────────────────────────────
       m.on('click', 'unclustered-point', (e) => {
         const props = e.features?.[0]?.properties
         if (!props) return
-
-        const now = Date.now()
-        const isDouble =
-          lastClickRef.current.id === props.id && now - lastClickRef.current.time < 400
-        lastClickRef.current = { time: now, id: props.id }
-
-        if (isDouble && props.source === 'user') {
-          const event = userEventsRef.current.find((ev) => ev.id === props.id)
-          if (event) { setSelectedEvent(null); setPendingEdit(event) }
-          return
-        }
-
         setSelectedEvent({
           id: props.id,
           name: props.name,
@@ -303,6 +290,15 @@ export default function GlobeMap() {
     })
     setPendingLocation(null)
     setPendingEdit(null)
+  }, [])
+
+  const handleDeleteEvent = useCallback((id: string) => {
+    setUserEvents((prev) => {
+      const updated = prev.filter((e) => e.id !== id)
+      saveUserEvents(updated)
+      return updated
+    })
+    setSelectedEvent(null)
   }, [])
 
   const hasTime = selectedEvent?.date.includes('T')
@@ -388,15 +384,33 @@ export default function GlobeMap() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setSelectedEvent(null)}
-                className="text-zinc-400 hover:text-white transition-colors shrink-0 mt-0.5"
-                aria-label="Close"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedEvent.source === 'user' && (
+                  <>
+                    <button
+                      onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}
+                      className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEvent(selectedEvent.id)}
+                      className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-red-900/60 hover:text-red-400 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setSelectedEvent(null)}
+                  className="text-zinc-400 hover:text-white transition-colors mt-0.5"
+                  aria-label="Close"
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
