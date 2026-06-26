@@ -30,7 +30,7 @@ export default function InfoPanel() {
             <p className="text-zinc-300 text-xs leading-relaxed">
               A global map of live music. Log events. Find shows. Explore the world through music.
             </p>
-            <p className="text-zinc-500 text-xs mt-1">Powered by Sonic Boom</p>
+            <p className="text-zinc-500 text-xs mt-1">Powered by Sonic Boom Music CIC</p>
 
             <div className="border-t border-zinc-700 mt-3 pt-3 space-y-2">
               <div className="flex items-center gap-2 text-xs text-zinc-300">
