@@ -101,14 +101,18 @@ export default function GlobeMap() {
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/standard',
       projection: 'globe',
       zoom: 1.5,
       center: [0, 20],
     })
 
     map.current.on('style.load', () => {
-      map.current?.setFog({
+      const m = map.current
+      if (!m) return
+      m.setConfigProperty('basemap', 'lightPreset', 'night')
+      m.setConfigProperty('basemap', 'show3dObjects', true)
+      m.setFog({
         color: 'rgb(10, 10, 30)',
         'high-color': 'rgb(20, 20, 60)',
         'horizon-blend': 0.05,
@@ -135,10 +139,10 @@ export default function GlobeMap() {
         id: 'clusters',
         type: 'circle',
         source: 'events',
+        slot: 'top',
         filter: ['has', 'point_count'],
         paint: {
           'circle-color': '#C8102E',
-          // step: default 15, ≥10 → 20, ≥30 → 25  (diameters 30/40/50px)
           'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 30, 25],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ff6b6b',
@@ -150,6 +154,7 @@ export default function GlobeMap() {
         id: 'cluster-count',
         type: 'symbol',
         source: 'events',
+        slot: 'top',
         filter: ['has', 'point_count'],
         layout: {
           'text-field': '{point_count_abbreviated}',
@@ -164,6 +169,7 @@ export default function GlobeMap() {
         id: 'unclustered-point-glow',
         type: 'circle',
         source: 'events',
+        slot: 'top',
         filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': 11,
@@ -178,6 +184,7 @@ export default function GlobeMap() {
         id: 'unclustered-point',
         type: 'circle',
         source: 'events',
+        slot: 'top',
         filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': 5,
