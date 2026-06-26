@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
+    "deploy": "node ./node_modules/@opennextjs/cloudflare/dist/cli/index.js build && node ./node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy",
+    "preview": "node ./node_modules/@opennextjs/cloudflare/dist/cli/index.js build && node ./node_modules/@opennextjs/cloudflare/dist/cli/index.js preview"
   },
   "dependencies": {
     "mapbox-gl": "^3.7.0",
