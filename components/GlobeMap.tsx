@@ -335,7 +335,7 @@ export default function GlobeMap() {
         searchSlot={
           <Search
             token={token}
-            onFlyTo={(center) => map.current?.flyTo({ center, zoom: 11 })}
+            onFlyTo={(center) => map.current?.flyTo({ center, zoom: 14 })}
           />
         }
       />
