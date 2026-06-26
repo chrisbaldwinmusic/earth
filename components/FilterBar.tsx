@@ -18,6 +18,7 @@ interface Props {
   onDateFromChange: (v: string) => void
   onDateToChange: (v: string) => void
   onClear: () => void
+  searchSlot?: React.ReactNode
 }
 
 export default function FilterBar({
@@ -29,6 +30,7 @@ export default function FilterBar({
   onDateFromChange,
   onDateToChange,
   onClear,
+  searchSlot,
 }: Props) {
   return (
     <div className="fixed top-0 left-0 right-0 z-30 bg-zinc-900/90 backdrop-blur-sm border-b border-zinc-800">
@@ -77,6 +79,8 @@ export default function FilterBar({
             Clear filters
           </button>
         )}
+
+        {searchSlot}
       </div>
     </div>
   )

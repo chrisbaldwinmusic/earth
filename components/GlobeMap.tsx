@@ -6,6 +6,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import seedEvents from '@/data/events.json'
 import AddEventModal from './AddEventModal'
 import FilterBar from './FilterBar'
+import Search from './Search'
 import type { MapEvent } from '@/types/events'
 
 const LS_KEY = 'sb-music-map-events'
@@ -304,6 +305,12 @@ export default function GlobeMap() {
           setDateFrom('')
           setDateTo('')
         }}
+        searchSlot={
+          <Search
+            token={token}
+            onFlyTo={(center) => map.current?.flyTo({ center, zoom: 11 })}
+          />
+        }
       />
 
       <div ref={mapContainer} style={{ width: '100vw', height: '100vh' }} />
@@ -373,6 +380,36 @@ export default function GlobeMap() {
                 <span className="text-zinc-500 uppercase tracking-wider text-xs">Genre</span>
                 <p className="text-zinc-200 mt-0.5">{selectedEvent.genre}</p>
               </div>
+              {selectedEvent.ticketLink && (
+                <div>
+                  <span className="text-zinc-500 uppercase tracking-wider text-xs">Tickets</span>
+                  <p className="mt-0.5">
+                    <a
+                      href={selectedEvent.ticketLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      Buy tickets →
+                    </a>
+                  </p>
+                </div>
+              )}
+              {selectedEvent.websiteLink && (
+                <div>
+                  <span className="text-zinc-500 uppercase tracking-wider text-xs">Website</span>
+                  <p className="mt-0.5">
+                    <a
+                      href={selectedEvent.websiteLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      {new URL(selectedEvent.websiteLink).hostname.replace('www.', '')} →
+                    </a>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

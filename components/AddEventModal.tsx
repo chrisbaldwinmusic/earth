@@ -30,6 +30,8 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Pr
   const [date, setDate] = useState('')
   const [city, setCity] = useState('')
   const [country, setCountry] = useState('')
+  const [ticketLink, setTicketLink] = useState('')
+  const [websiteLink, setWebsiteLink] = useState('')
   const [geocoding, setGeocoding] = useState(true)
 
   const today = new Date().toISOString().split('T')[0]
@@ -75,6 +77,8 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Pr
       lat,
       lng,
       source: 'user',
+      ticketLink: ticketLink.trim() || undefined,
+      websiteLink: websiteLink.trim() || undefined,
     })
   }
 
@@ -180,6 +184,28 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Pr
                 className={inputClass}
               />
             </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Ticket Link <span className="normal-case tracking-normal text-zinc-600">(optional)</span></label>
+            <input
+              type="url"
+              value={ticketLink}
+              onChange={(e) => setTicketLink(e.target.value)}
+              placeholder="https://ra.co/events/…"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Website / Social <span className="normal-case tracking-normal text-zinc-600">(optional)</span></label>
+            <input
+              type="url"
+              value={websiteLink}
+              onChange={(e) => setWebsiteLink(e.target.value)}
+              placeholder="https://instagram.com/…"
+              className={inputClass}
+            />
           </div>
 
           <div className="flex gap-3 pt-1">

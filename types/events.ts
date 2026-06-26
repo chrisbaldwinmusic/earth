@@ -9,4 +9,6 @@ export interface MapEvent {
   lat: number
   lng: number
   source: 'seeded' | 'user'
+  ticketLink?: string
+  websiteLink?: string
 }
