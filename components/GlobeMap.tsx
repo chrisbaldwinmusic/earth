@@ -59,6 +59,10 @@ export default function GlobeMap() {
   const [dateTo, setDateTo] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ''
+  const [pendingEdit, setPendingEdit] = useState<MapEvent | null>(null)
+  const userEventsRef = useRef(userEvents)
+  userEventsRef.current = userEvents
+  const lastClickRef = useRef<{ time: number; id: string | null }>({ time: 0, id: null })
 
   const allEvents = useMemo<MapEvent[]>(
     () => [
@@ -206,10 +210,22 @@ export default function GlobeMap() {
         )
       })
 
-      // ── Click: individual point → detail panel ──────────────────────────
+      // ── Click / double-click: individual point ──────────────────────────
       m.on('click', 'unclustered-point', (e) => {
         const props = e.features?.[0]?.properties
         if (!props) return
+
+        const now = Date.now()
+        const isDouble =
+          lastClickRef.current.id === props.id && now - lastClickRef.current.time < 400
+        lastClickRef.current = { time: now, id: props.id }
+
+        if (isDouble && props.source === 'user') {
+          const event = userEventsRef.current.find((ev) => ev.id === props.id)
+          if (event) { setSelectedEvent(null); setPendingEdit(event) }
+          return
+        }
+
         setSelectedEvent({
           id: props.id,
           name: props.name,
@@ -221,6 +237,8 @@ export default function GlobeMap() {
           lat: props.lat,
           lng: props.lng,
           source: props.source as 'seeded' | 'user',
+          ticketLink: props.ticketLink ?? undefined,
+          websiteLink: props.websiteLink ?? undefined,
         })
       })
 
@@ -269,13 +287,15 @@ export default function GlobeMap() {
   }, [selectedEvent, pendingLocation])
 
   // ── Save new user event ───────────────────────────────────────────────────
-  const handleEventSaved = useCallback((newEvent: MapEvent) => {
+  const handleEventSaved = useCallback((event: MapEvent) => {
     setUserEvents((prev) => {
-      const updated = [...prev, newEvent]
+      const exists = prev.some((e) => e.id === event.id)
+      const updated = exists ? prev.map((e) => (e.id === event.id ? event : e)) : [...prev, event]
       saveUserEvents(updated)
       return updated
     })
     setPendingLocation(null)
+    setPendingEdit(null)
   }, [])
 
   const hasTime = selectedEvent?.date.includes('T')
@@ -322,6 +342,17 @@ export default function GlobeMap() {
           token={token}
           onSubmit={handleEventSaved}
           onClose={() => setPendingLocation(null)}
+        />
+      )}
+
+      {pendingEdit && (
+        <AddEventModal
+          lat={pendingEdit.lat}
+          lng={pendingEdit.lng}
+          token={token}
+          onSubmit={handleEventSaved}
+          onClose={() => setPendingEdit(null)}
+          initialEvent={pendingEdit}
         />
       )}
 

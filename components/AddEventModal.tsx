@@ -14,6 +14,7 @@ interface Props {
   token: string
   onSubmit: (event: MapEvent) => void
   onClose: () => void
+  initialEvent?: MapEvent
 }
 
 const inputClass =
@@ -22,21 +23,23 @@ const inputClass =
 
 const labelClass = 'block text-zinc-500 text-xs uppercase tracking-wider mb-1'
 
-export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Props) {
+export default function AddEventModal({ lat, lng, token, onSubmit, onClose, initialEvent }: Props) {
+  const isEditing = Boolean(initialEvent)
   const overlayRef = useRef<HTMLDivElement>(null)
-  const [name, setName] = useState('')
-  const [venue, setVenue] = useState('')
-  const [genre, setGenre] = useState('Rock')
-  const [date, setDate] = useState('')
-  const [city, setCity] = useState('')
-  const [country, setCountry] = useState('')
-  const [ticketLink, setTicketLink] = useState('')
-  const [websiteLink, setWebsiteLink] = useState('')
-  const [geocoding, setGeocoding] = useState(true)
+  const [name, setName] = useState(initialEvent?.name ?? '')
+  const [venue, setVenue] = useState(initialEvent?.venue ?? '')
+  const [genre, setGenre] = useState(initialEvent?.genre ?? 'Rock')
+  const [date, setDate] = useState(initialEvent?.date ?? '')
+  const [city, setCity] = useState(initialEvent?.city ?? '')
+  const [country, setCountry] = useState(initialEvent?.country ?? '')
+  const [ticketLink, setTicketLink] = useState(initialEvent?.ticketLink ?? '')
+  const [websiteLink, setWebsiteLink] = useState(initialEvent?.websiteLink ?? '')
+  const [geocoding, setGeocoding] = useState(!isEditing)
 
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
+    if (isEditing) return
     async function reverseGeocode() {
       try {
         const res = await fetch(
@@ -67,7 +70,7 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Pr
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSubmit({
-      id: crypto.randomUUID(),
+      id: initialEvent?.id ?? crypto.randomUUID(),
       name,
       venue,
       genre,
@@ -90,7 +93,7 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Pr
     >
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-white font-semibold text-lg">Log Event</h2>
+          <h2 className="text-white font-semibold text-lg">{isEditing ? 'Edit Event' : 'Log Event'}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -223,7 +226,7 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose }: Pr
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#a50d25')}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#C8102E')}
             >
-              Save Event
+              {isEditing ? 'Update Event' : 'Save Event'}
             </button>
           </div>
         </form>
