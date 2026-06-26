@@ -1,0 +1,68 @@
+[
+  {
+    "id": "1",
+    "name": "Boiler Room Tokyo",
+    "venue": "Contact",
+    "city": "Tokyo",
+    "country": "Japan",
+    "genre": "Techno",
+    "date": "2026-07-12T22:00:00Z",
+    "lat": 35.6762,
+    "lng": 139.6503
+  },
+  {
+    "id": "2",
+    "name": "Berghain Nacht",
+    "venue": "Berghain",
+    "city": "Berlin",
+    "country": "Germany",
+    "genre": "Industrial Techno",
+    "date": "2026-07-19T23:00:00Z",
+    "lat": 52.5110,
+    "lng": 13.4418
+  },
+  {
+    "id": "3",
+    "name": "Fabric All-Nighter",
+    "venue": "Fabric",
+    "city": "London",
+    "country": "United Kingdom",
+    "genre": "Drum & Bass",
+    "date": "2026-08-02T22:30:00Z",
+    "lat": 51.5203,
+    "lng": -0.1021
+  },
+  {
+    "id": "4",
+    "name": "Movement São Paulo",
+    "venue": "Espaço das Américas",
+    "city": "São Paulo",
+    "country": "Brazil",
+    "genre": "Electronic",
+    "date": "2026-08-15T20:00:00Z",
+    "lat": -23.5505,
+    "lng": -46.6333
+  },
+  {
+    "id": "5",
+    "name": "Dekmantel Cape Town",
+    "venue": "Shimmy Beach Club",
+    "city": "Cape Town",
+    "country": "South Africa",
+    "genre": "House",
+    "date": "2026-09-05T21:00:00Z",
+    "lat": -33.9249,
+    "lng": 18.4241
+  },
+  {
+    "id": "6",
+    "name": "Laneway Festival",
+    "venue": "Footscray Park",
+    "city": "Melbourne",
+    "country": "Australia",
+    "genre": "Indie / Electronic",
+    "date": "2026-09-20T14:00:00Z",
+    "lat": -37.8136,
+    "lng": 144.9631
+  }
+]
