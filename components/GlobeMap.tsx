@@ -7,6 +7,7 @@ import seedEvents from '@/data/events.json'
 import AddEventModal from './AddEventModal'
 import FilterBar from './FilterBar'
 import Search from './Search'
+import InfoPanel from './InfoPanel'
 import type { LineupEntry, MapEvent } from '@/types/events'
 
 const LS_KEY = 'sb-music-map-events'
@@ -354,6 +355,8 @@ export default function GlobeMap() {
           />
         }
       />
+
+      <InfoPanel />
 
       <div ref={mapContainer} style={{ width: '100vw', height: '100vh' }} />
 
