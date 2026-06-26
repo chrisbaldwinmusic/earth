@@ -193,7 +193,9 @@ export default function GlobeMap() {
         const features = m.queryRenderedFeatures(e.point, { layers: ['clusters'] })
         const clusterId = features[0]?.properties?.cluster_id as number | undefined
         if (clusterId == null) return
-        const coords = (features[0].geometry as { coordinates: [number, number] }).coordinates
+        const geom = features[0].geometry
+        if (geom.type !== 'Point') return
+        const coords = geom.coordinates as [number, number]
         ;(m.getSource('events') as mapboxgl.GeoJSONSource).getClusterExpansionZoom(
           clusterId,
           (err, zoom) => {
