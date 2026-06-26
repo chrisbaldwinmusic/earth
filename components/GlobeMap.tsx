@@ -7,7 +7,7 @@ import seedEvents from '@/data/events.json'
 import AddEventModal from './AddEventModal'
 import FilterBar from './FilterBar'
 import Search from './Search'
-import type { MapEvent } from '@/types/events'
+import type { LineupEntry, MapEvent } from '@/types/events'
 
 const LS_KEY = 'sb-music-map-events'
 
@@ -44,6 +44,7 @@ function toGeoJSON(events: MapEvent[]) {
         source: e.source,
         ticketLink: e.ticketLink ?? null,
         websiteLink: e.websiteLink ?? null,
+        lineup: e.lineup ? JSON.stringify(e.lineup) : null,
       },
     })),
   }
@@ -233,6 +234,7 @@ export default function GlobeMap() {
           source: props.source as 'seeded' | 'user',
           ticketLink: props.ticketLink ?? undefined,
           websiteLink: props.websiteLink ?? undefined,
+          lineup: props.lineup ? (JSON.parse(props.lineup) as LineupEntry[]) : undefined,
         })
       })
 
@@ -463,6 +465,24 @@ export default function GlobeMap() {
                 </div>
               )}
             </div>
+
+            {selectedEvent.lineup && selectedEvent.lineup.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-zinc-800">
+                <span className="text-zinc-500 uppercase tracking-wider text-xs">Lineup</span>
+                <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1">
+                  {[...selectedEvent.lineup]
+                    .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''))
+                    .map((entry, i) => (
+                      <div key={i} className="flex items-baseline gap-2 text-sm">
+                        {entry.time && (
+                          <span className="text-zinc-500 tabular-nums text-xs">{entry.time}</span>
+                        )}
+                        <span className="text-zinc-200">{entry.name}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

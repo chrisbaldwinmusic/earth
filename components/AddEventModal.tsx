@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { MapEvent } from '@/types/events'
+import type { LineupEntry, MapEvent } from '@/types/events'
 
 const GENRES = [
   'Rock', 'Electronic', 'Folk', 'Jazz', 'Classical',
@@ -34,6 +34,7 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
   const [country, setCountry] = useState(initialEvent?.country ?? '')
   const [ticketLink, setTicketLink] = useState(initialEvent?.ticketLink ?? '')
   const [websiteLink, setWebsiteLink] = useState(initialEvent?.websiteLink ?? '')
+  const [lineup, setLineup] = useState<LineupEntry[]>(initialEvent?.lineup ?? [])
   const [geocoding, setGeocoding] = useState(!isEditing)
 
   const today = new Date().toISOString().split('T')[0]
@@ -82,6 +83,9 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
       source: 'user',
       ticketLink: ticketLink.trim() || undefined,
       websiteLink: websiteLink.trim() || undefined,
+      lineup: lineup.filter((e) => e.name.trim()).length > 0
+        ? lineup.filter((e) => e.name.trim())
+        : undefined,
     })
   }
 
@@ -209,6 +213,58 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
               placeholder="https://instagram.com/…"
               className={inputClass}
             />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className={labelClass + ' mb-0'}>
+                Lineup <span className="normal-case tracking-normal text-zinc-600">(optional)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setLineup((prev) => [...prev, { name: '', time: '' }])}
+                className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" />
+                </svg>
+                Add performer
+              </button>
+            </div>
+            {lineup.length === 0 ? (
+              <p className="text-zinc-600 text-xs py-1">No lineup added yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {lineup.map((entry, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={entry.name}
+                      onChange={(e) => setLineup((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                      placeholder="DJ / Artist name"
+                      className={inputClass + ' flex-1'}
+                    />
+                    <input
+                      type="time"
+                      value={entry.time ?? ''}
+                      onChange={(e) => setLineup((prev) => prev.map((x, j) => j === i ? { ...x, time: e.target.value } : x))}
+                      className={inputClass + ' w-28'}
+                      style={{ colorScheme: 'dark' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLineup((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-zinc-500 hover:text-red-400 transition-colors shrink-0"
+                      aria-label="Remove"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-1">

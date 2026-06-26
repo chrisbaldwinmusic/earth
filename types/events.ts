@@ -1,3 +1,8 @@
+export interface LineupEntry {
+  name: string
+  time?: string
+}
+
 export interface MapEvent {
   id: string
   name: string
@@ -11,4 +16,5 @@ export interface MapEvent {
   source: 'seeded' | 'user'
   ticketLink?: string
   websiteLink?: string
+  lineup?: LineupEntry[]
 }
