@@ -63,6 +63,9 @@ export default function GlobeMap() {
   const panelRef = useRef<HTMLDivElement>(null)
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ''
   const [pendingEdit, setPendingEdit] = useState<MapEvent | null>(null)
+  const [pendingLocationPrefill, setPendingLocationPrefill] = useState<{
+    venue: string; city: string; country: string
+  } | null>(null)
 
   const allEvents = useMemo<MapEvent[]>(
     () => [
@@ -291,6 +294,7 @@ export default function GlobeMap() {
       return updated
     })
     setPendingLocation(null)
+    setPendingLocationPrefill(null)
     setPendingEdit(null)
   }, [])
 
@@ -302,6 +306,19 @@ export default function GlobeMap() {
     })
     setSelectedEvent(null)
   }, [])
+
+  const venueKey = (e: MapEvent) =>
+    `${e.venue.toLowerCase().trim()}|${e.city.toLowerCase().trim()}`
+
+  const selectedStack = useMemo(() => {
+    if (!selectedEvent) return []
+    const k = venueKey(selectedEvent)
+    return [...filteredEvents]
+      .filter((e) => venueKey(e) === k)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [selectedEvent, filteredEvents])
+
+  const stackIndex = selectedStack.findIndex((e) => e.id === selectedEvent?.id)
 
   const hasTime = selectedEvent?.date.includes('T')
   const formattedDate = selectedEvent
@@ -346,7 +363,8 @@ export default function GlobeMap() {
           lng={pendingLocation.lng}
           token={token}
           onSubmit={handleEventSaved}
-          onClose={() => setPendingLocation(null)}
+          onClose={() => { setPendingLocation(null); setPendingLocationPrefill(null) }}
+          prefillVenue={pendingLocationPrefill ?? undefined}
         />
       )}
 
@@ -414,6 +432,28 @@ export default function GlobeMap() {
                 </button>
               </div>
             </div>
+
+            {selectedStack.length > 1 && (
+              <div className="flex items-center gap-3 mb-3 text-xs text-zinc-500">
+                <button
+                  onClick={() => setSelectedEvent(selectedStack[stackIndex - 1])}
+                  disabled={stackIndex === 0}
+                  className="hover:text-white transition-colors disabled:opacity-25"
+                  aria-label="Previous event"
+                >
+                  ‹
+                </button>
+                <span>{stackIndex + 1} / {selectedStack.length} events at this venue</span>
+                <button
+                  onClick={() => setSelectedEvent(selectedStack[stackIndex + 1])}
+                  disabled={stackIndex === selectedStack.length - 1}
+                  className="hover:text-white transition-colors disabled:opacity-25"
+                  aria-label="Next event"
+                >
+                  ›
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
               <div>
@@ -483,6 +523,23 @@ export default function GlobeMap() {
                 </div>
               </div>
             )}
+
+            <div className="mt-4 pt-3 border-t border-zinc-800">
+              <button
+                onClick={() => {
+                  setPendingLocationPrefill({
+                    venue: selectedEvent.venue,
+                    city: selectedEvent.city,
+                    country: selectedEvent.country,
+                  })
+                  setPendingLocation({ lat: selectedEvent.lat, lng: selectedEvent.lng })
+                  setSelectedEvent(null)
+                }}
+                className="text-xs text-zinc-500 hover:text-white transition-colors"
+              >
+                + Add another event at this venue
+              </button>
+            </div>
           </div>
         </div>
       )}

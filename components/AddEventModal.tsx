@@ -15,6 +15,7 @@ interface Props {
   onSubmit: (event: MapEvent) => void
   onClose: () => void
   initialEvent?: MapEvent
+  prefillVenue?: { venue: string; city: string; country: string }
 }
 
 const inputClass =
@@ -23,24 +24,24 @@ const inputClass =
 
 const labelClass = 'block text-zinc-500 text-xs uppercase tracking-wider mb-1'
 
-export default function AddEventModal({ lat, lng, token, onSubmit, onClose, initialEvent }: Props) {
+export default function AddEventModal({ lat, lng, token, onSubmit, onClose, initialEvent, prefillVenue }: Props) {
   const isEditing = Boolean(initialEvent)
   const overlayRef = useRef<HTMLDivElement>(null)
   const [name, setName] = useState(initialEvent?.name ?? '')
-  const [venue, setVenue] = useState(initialEvent?.venue ?? '')
+  const [venue, setVenue] = useState(initialEvent?.venue ?? prefillVenue?.venue ?? '')
   const [genre, setGenre] = useState(initialEvent?.genre ?? 'Rock')
   const [date, setDate] = useState(initialEvent?.date ?? '')
-  const [city, setCity] = useState(initialEvent?.city ?? '')
-  const [country, setCountry] = useState(initialEvent?.country ?? '')
+  const [city, setCity] = useState(initialEvent?.city ?? prefillVenue?.city ?? '')
+  const [country, setCountry] = useState(initialEvent?.country ?? prefillVenue?.country ?? '')
   const [ticketLink, setTicketLink] = useState(initialEvent?.ticketLink ?? '')
   const [websiteLink, setWebsiteLink] = useState(initialEvent?.websiteLink ?? '')
   const [lineup, setLineup] = useState<LineupEntry[]>(initialEvent?.lineup ?? [])
-  const [geocoding, setGeocoding] = useState(!isEditing)
+  const [geocoding, setGeocoding] = useState(!isEditing && !prefillVenue)
 
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
-    if (isEditing) return
+    if (isEditing || prefillVenue) return
     async function reverseGeocode() {
       try {
         const res = await fetch(
