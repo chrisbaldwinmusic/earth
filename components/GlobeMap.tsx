@@ -107,8 +107,8 @@ export default function GlobeMap() {
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/standard',
       projection: 'globe',
-      zoom: 1.5,
-      center: [0, 20],
+      zoom: 11,
+      center: [-1.637, 52.802],
     })
 
     map.current.on('style.load', () => {
