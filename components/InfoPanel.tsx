@@ -10,7 +10,7 @@ export default function InfoPanel() {
   }, [])
 
   return (
-    <div className="fixed top-14 left-3 z-30 w-72 max-w-[calc(100vw-1.5rem)]">
+    <div className="fixed top-14 left-3 z-30 w-72 max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-4rem)] overflow-y-auto rounded-xl">
       <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-xl shadow-xl overflow-hidden">
         <button
           onClick={() => setExpanded((e) => !e)}

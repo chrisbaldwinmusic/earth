@@ -385,8 +385,8 @@ export default function GlobeMap() {
       {selectedEvent && (
         <div
           ref={panelRef}
-          className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-900 border-t border-zinc-700 px-6 pt-5 pb-8 animate-slide-up"
-          style={{ maxHeight: '40vh' }}
+          className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-900 border-t border-zinc-700 px-6 pt-5 pb-8 animate-slide-up overflow-y-auto"
+          style={{ maxHeight: '50vh' }}
         >
           <div className="max-w-2xl mx-auto">
             <div className="flex items-start justify-between mb-4">

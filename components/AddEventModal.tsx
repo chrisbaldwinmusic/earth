@@ -100,7 +100,7 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onMouseDown={handleOverlayMouseDown}
     >
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-white font-semibold text-lg">{isEditing ? 'Edit Event' : 'Log Event'}</h2>
           <button
