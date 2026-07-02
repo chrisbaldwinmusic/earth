@@ -1,21 +1,33 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Script from 'next/script'
 import type { LineupEntry, MapEvent } from '@/types/events'
+import { GENRES } from '@/lib/genres'
 
-const GENRES = [
-  'Rock', 'Electronic', 'Folk', 'Jazz', 'Classical',
-  'Hip-Hop', 'Pop', 'Metal', 'World', 'Other',
-]
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: { sitekey: string; callback: (token: string) => void; 'expired-callback'?: () => void },
+      ) => string
+      remove: (widgetId: string) => void
+      reset: (widgetId: string) => void
+    }
+  }
+}
 
 interface Props {
   lat: number
   lng: number
   token: string
-  onSubmit: (event: MapEvent) => void
+  turnstileSiteKey: string
+  onSaved: (event: MapEvent, editToken?: string) => void
   onClose: () => void
   initialEvent?: MapEvent
   prefillVenue?: { venue: string; city: string; country: string }
+  editToken?: string
 }
 
 const inputClass =
@@ -28,7 +40,9 @@ const inlineInputClass =
 
 const labelClass = 'block text-zinc-500 text-xs uppercase tracking-wider mb-1'
 
-export default function AddEventModal({ lat, lng, token, onSubmit, onClose, initialEvent, prefillVenue }: Props) {
+export default function AddEventModal({
+  lat, lng, token, turnstileSiteKey, onSaved, onClose, initialEvent, prefillVenue, editToken,
+}: Props) {
   const isEditing = Boolean(initialEvent)
   const overlayRef = useRef<HTMLDivElement>(null)
   const [name, setName] = useState(initialEvent?.name ?? '')
@@ -41,8 +55,30 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
   const [websiteLink, setWebsiteLink] = useState(initialEvent?.websiteLink ?? '')
   const [lineup, setLineup] = useState<LineupEntry[]>(initialEvent?.lineup ?? [])
   const [geocoding, setGeocoding] = useState(!isEditing && !prefillVenue)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileReady, setTurnstileReady] = useState(false)
+  const turnstileContainerRef = useRef<HTMLDivElement>(null)
+  const turnstileWidgetId = useRef<string | undefined>(undefined)
 
   const today = new Date().toISOString().split('T')[0]
+
+  // Render the Turnstile widget explicitly once its script is loaded (create mode only —
+  // edits are authorized via the ownership edit token instead of a fresh CAPTCHA solve).
+  useEffect(() => {
+    if (isEditing || !turnstileReady || !turnstileContainerRef.current || !window.turnstile) return
+    const widgetId = window.turnstile.render(turnstileContainerRef.current, {
+      sitekey: turnstileSiteKey,
+      callback: (t) => setTurnstileToken(t),
+      'expired-callback': () => setTurnstileToken(null),
+    })
+    turnstileWidgetId.current = widgetId
+    return () => {
+      window.turnstile?.remove(widgetId)
+      turnstileWidgetId.current = undefined
+    }
+  }, [isEditing, turnstileReady, turnstileSiteKey])
 
   useEffect(() => {
     if (isEditing || prefillVenue) return
@@ -73,10 +109,11 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
     if (e.target === overlayRef.current) onClose()
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({
-      id: initialEvent?.id ?? crypto.randomUUID(),
+    if (!isEditing && !turnstileToken) return
+
+    const payload = {
       name,
       venue,
       genre,
@@ -85,13 +122,43 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
       country,
       lat,
       lng,
-      source: 'user',
       ticketLink: ticketLink.trim() || undefined,
       websiteLink: websiteLink.trim() || undefined,
-      lineup: lineup.filter((e) => e.name.trim()).length > 0
-        ? lineup.filter((e) => e.name.trim())
+      lineup: lineup.filter((entry) => entry.name.trim()).length > 0
+        ? lineup.filter((entry) => entry.name.trim())
         : undefined,
-    })
+    }
+
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      if (isEditing) {
+        const res = await fetch(`/api/events/${initialEvent!.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Edit-Token': editToken ?? '' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error('Failed to update event')
+        onSaved((await res.json()) as MapEvent)
+      } else {
+        const res = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, 'cf-turnstile-response': turnstileToken }),
+        })
+        if (!res.ok) {
+          if (turnstileWidgetId.current) window.turnstile?.reset(turnstileWidgetId.current)
+          setTurnstileToken(null)
+          throw new Error('Failed to save event')
+        }
+        const { event, editToken: newEditToken } = (await res.json()) as { event: MapEvent; editToken: string }
+        onSaved(event, newEditToken)
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -272,6 +339,19 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
             )}
           </div>
 
+          {!isEditing && (
+            <div>
+              <Script
+                src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+                strategy="afterInteractive"
+                onReady={() => setTurnstileReady(true)}
+              />
+              <div ref={turnstileContainerRef} />
+            </div>
+          )}
+
+          {submitError && <p className="text-red-400 text-xs">{submitError}</p>}
+
           <div className="flex gap-3 pt-1">
             <button
               type="button"
@@ -282,12 +362,13 @@ export default function AddEventModal({ lat, lng, token, onSubmit, onClose, init
             </button>
             <button
               type="submit"
-              className="flex-1 py-2 text-sm text-white font-medium rounded-lg transition-colors"
+              disabled={submitting || (!isEditing && !turnstileToken)}
+              className="flex-1 py-2 text-sm text-white font-medium rounded-lg transition-colors disabled:opacity-50"
               style={{ backgroundColor: '#C8102E' }}
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#a50d25')}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#C8102E')}
             >
-              {isEditing ? 'Update Event' : 'Save Event'}
+              {submitting ? 'Saving…' : isEditing ? 'Update Event' : 'Save Event'}
             </button>
           </div>
         </form>

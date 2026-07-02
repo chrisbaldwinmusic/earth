@@ -3,27 +3,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import seedEvents from '@/data/events.json'
 import AddEventModal from './AddEventModal'
 import FilterBar from './FilterBar'
 import Search from './Search'
 import InfoPanel from './InfoPanel'
 import type { LineupEntry, MapEvent } from '@/types/events'
 
-const LS_KEY = 'sb-music-map-events'
+// Maps event id -> the secret returned when this browser created that event,
+// proving ownership without requiring accounts. Events themselves now live in D1.
+const EDIT_TOKENS_KEY = 'sb-music-map-edit-tokens'
 
-function loadUserEvents(): MapEvent[] {
+function loadEditTokens(): Record<string, string> {
   try {
-    const raw = localStorage.getItem(LS_KEY)
-    if (!raw) return []
-    return (JSON.parse(raw) as MapEvent[]).map((e) => ({ ...e, source: 'user' as const }))
+    const raw = localStorage.getItem(EDIT_TOKENS_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {}
   } catch {
-    return []
+    return {}
   }
 }
 
-function saveUserEvents(events: MapEvent[]) {
-  localStorage.setItem(LS_KEY, JSON.stringify(events))
+function saveEditTokens(tokens: Record<string, string>) {
+  localStorage.setItem(EDIT_TOKENS_KEY, JSON.stringify(tokens))
 }
 
 function toGeoJSON(events: MapEvent[]) {
@@ -57,27 +57,38 @@ export default function GlobeMap() {
   const [mapReady, setMapReady] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null)
   const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null)
-  const [userEvents, setUserEvents] = useState<MapEvent[]>(() => loadUserEvents())
+  const [allEvents, setAllEvents] = useState<MapEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [editTokens, setEditTokens] = useState<Record<string, string>>(() => loadEditTokens())
   const [genreFilter, setGenreFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ''
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
   const [pendingEdit, setPendingEdit] = useState<MapEvent | null>(null)
   const [pendingLocationPrefill, setPendingLocationPrefill] = useState<{
     venue: string; city: string; country: string
   } | null>(null)
 
-  const allEvents = useMemo<MapEvent[]>(
-    () => [
-      ...(seedEvents as Omit<MapEvent, 'source'>[]).map((e) => ({
-        ...e,
-        source: 'seeded' as const,
-      })),
-      ...userEvents,
-    ],
-    [userEvents],
-  )
+  const loadEvents = useCallback(async () => {
+    setLoading(true)
+    setLoadError(false)
+    try {
+      const res = await fetch('/api/events')
+      if (!res.ok) throw new Error('Failed to load events')
+      setAllEvents((await res.json()) as MapEvent[])
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadEvents()
+  }, [loadEvents])
 
   const filteredEvents = useMemo(
     () =>
@@ -235,7 +246,7 @@ export default function GlobeMap() {
           date: props.date,
           lat: props.lat,
           lng: props.lng,
-          source: props.source as 'seeded' | 'user',
+          source: props.source as MapEvent['source'],
           ticketLink: props.ticketLink ?? undefined,
           websiteLink: props.websiteLink ?? undefined,
           lineup: props.lineup ? (JSON.parse(props.lineup) as LineupEntry[]) : undefined,
@@ -286,27 +297,44 @@ export default function GlobeMap() {
     return () => document.removeEventListener('mousedown', handle)
   }, [selectedEvent, pendingLocation])
 
-  // ── Save new user event ───────────────────────────────────────────────────
-  const handleEventSaved = useCallback((event: MapEvent) => {
-    setUserEvents((prev) => {
+  // ── Save new/edited user event ────────────────────────────────────────────
+  const handleEventSaved = useCallback((event: MapEvent, editToken?: string) => {
+    setAllEvents((prev) => {
       const exists = prev.some((e) => e.id === event.id)
-      const updated = exists ? prev.map((e) => (e.id === event.id ? event : e)) : [...prev, event]
-      saveUserEvents(updated)
-      return updated
+      return exists ? prev.map((e) => (e.id === event.id ? event : e)) : [...prev, event]
     })
+    if (editToken) {
+      setEditTokens((prev) => {
+        const updated = { ...prev, [event.id]: editToken }
+        saveEditTokens(updated)
+        return updated
+      })
+    }
     setPendingLocation(null)
     setPendingLocationPrefill(null)
     setPendingEdit(null)
   }, [])
 
-  const handleDeleteEvent = useCallback((id: string) => {
-    setUserEvents((prev) => {
-      const updated = prev.filter((e) => e.id !== id)
-      saveUserEvents(updated)
-      return updated
-    })
-    setSelectedEvent(null)
-  }, [])
+  const handleDeleteEvent = useCallback(async (id: string) => {
+    const editToken = editTokens[id]
+    if (!editToken) return
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-Edit-Token': editToken },
+      })
+      if (!res.ok) throw new Error('Failed to delete event')
+      setAllEvents((prev) => prev.filter((e) => e.id !== id))
+      setEditTokens((prev) => {
+        const { [id]: _removed, ...rest } = prev
+        saveEditTokens(rest)
+        return rest
+      })
+      setSelectedEvent(null)
+    } catch {
+      // Leave the panel open and the event in place; user can retry.
+    }
+  }, [editTokens])
 
   const venueKey = (e: MapEvent) =>
     `${e.venue.toLowerCase().trim()}|${e.city.toLowerCase().trim()}`
@@ -358,6 +386,21 @@ export default function GlobeMap() {
 
       <InfoPanel />
 
+      {loading && allEvents.length === 0 && !loadError && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 bg-zinc-900/90 text-zinc-300 text-sm px-4 py-2 rounded-lg shadow-lg">
+          Loading events…
+        </div>
+      )}
+
+      {loadError && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-red-900/90 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+          Couldn&apos;t load events.
+          <button onClick={loadEvents} className="underline hover:no-underline">
+            Retry
+          </button>
+        </div>
+      )}
+
       <div ref={mapContainer} style={{ width: '100vw', height: '100vh' }} />
 
       {pendingLocation && (
@@ -365,7 +408,8 @@ export default function GlobeMap() {
           lat={pendingLocation.lat}
           lng={pendingLocation.lng}
           token={token}
-          onSubmit={handleEventSaved}
+          turnstileSiteKey={turnstileSiteKey}
+          onSaved={handleEventSaved}
           onClose={() => { setPendingLocation(null); setPendingLocationPrefill(null) }}
           prefillVenue={pendingLocationPrefill ?? undefined}
         />
@@ -376,9 +420,11 @@ export default function GlobeMap() {
           lat={pendingEdit.lat}
           lng={pendingEdit.lng}
           token={token}
-          onSubmit={handleEventSaved}
+          turnstileSiteKey={turnstileSiteKey}
+          onSaved={handleEventSaved}
           onClose={() => setPendingEdit(null)}
           initialEvent={pendingEdit}
+          editToken={editTokens[pendingEdit.id]}
         />
       )}
 
@@ -408,7 +454,7 @@ export default function GlobeMap() {
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {selectedEvent.source === 'user' && (
+                {selectedEvent.source === 'user' && Boolean(editTokens[selectedEvent.id]) && (
                   <>
                     <button
                       onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}

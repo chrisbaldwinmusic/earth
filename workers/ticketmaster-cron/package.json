@@ -1,0 +1,14 @@
+{
+  "name": "earth-ticketmaster-cron",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "wrangler": "^4.105.0"
+  }
+}

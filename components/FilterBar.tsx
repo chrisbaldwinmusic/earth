@@ -1,9 +1,6 @@
 'use client'
 
-const GENRES = [
-  'Rock', 'Electronic', 'Folk', 'Jazz', 'Classical',
-  'Hip-Hop', 'Pop', 'Metal', 'World', 'Other',
-]
+import { GENRES } from '@/lib/genres'
 
 const PRESETS = [
   { id: 'today',      label: 'Today' },

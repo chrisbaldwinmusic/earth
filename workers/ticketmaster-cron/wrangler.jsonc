@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "earth-ticketmaster-cron",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
+  "vars": {
+    "MAX_PAGES": "5"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "earth-events",
+      "database_id": "882d38df-b7af-4a4b-b13d-a60d4b5b96be"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
