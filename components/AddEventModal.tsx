@@ -87,15 +87,13 @@ export default function AddEventModal({
         const res = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${token}&types=place,country`,
         )
-        const data = await res.json()
-        const place = data.features?.find((f: { place_type: string[] }) =>
-          f.place_type.includes('place'),
-        )
-        const countryFeature = data.features?.find((f: { place_type: string[] }) =>
-          f.place_type.includes('country'),
-        )
-        setCity((place as { text?: string } | undefined)?.text ?? '')
-        setCountry((countryFeature as { text?: string } | undefined)?.text ?? '')
+        const data = (await res.json()) as {
+          features?: { place_type: string[]; text?: string }[]
+        }
+        const place = data.features?.find((f) => f.place_type.includes('place'))
+        const countryFeature = data.features?.find((f) => f.place_type.includes('country'))
+        setCity(place?.text ?? '')
+        setCountry(countryFeature?.text ?? '')
       } catch {
         // leave fields blank for user to fill in
       } finally {

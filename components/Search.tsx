@@ -32,7 +32,7 @@ export default function Search({ token, onFlyTo }: Props) {
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
           `?access_token=${token}&autocomplete=true&limit=6&types=place,postcode,address,region,country,locality`
         )
-        const data = await res.json()
+        const data = (await res.json()) as { features?: Result[] }
         setResults(data.features ?? [])
         setOpen(true)
       } catch {
