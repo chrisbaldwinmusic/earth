@@ -285,13 +285,13 @@ export default function GlobeMap() {
     )
   }, [filteredEvents, mapReady])
 
-  // ── Auto-open the festival mainstage event on first load ───────────────────
+  // ── Auto-open the Sonic Boom Festival Mainstage event on first load ────────
+  // Matched by id (not name) since the name gets edited via /admin over time.
+  const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
   const autoSelectedRef = useRef(false)
   useEffect(() => {
     if (autoSelectedRef.current || !mapReady || allEvents.length === 0) return
-    const mainstage = allEvents.find(
-      (e) => e.name === 'Mainstage' && e.venue === 'Burton Market Square',
-    )
+    const mainstage = allEvents.find((e) => e.id === MAINSTAGE_ID)
     if (mainstage) {
       setSelectedEvent(mainstage)
       autoSelectedRef.current = true
