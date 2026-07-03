@@ -104,7 +104,7 @@ export default function AdminPanel() {
 
   if (!password) {
     return (
-      <main className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <main className="h-screen overflow-y-auto bg-zinc-950 flex items-center justify-center px-4">
         <form
           onSubmit={handleLogin}
           className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-lg p-6"
@@ -135,7 +135,7 @@ export default function AdminPanel() {
   const approved = events?.filter((e) => e.status !== 'pending') ?? []
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-8">
+    <main className="h-screen overflow-y-auto bg-zinc-950 px-4 py-8">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-white text-xl font-semibold">Event moderation</h1>
