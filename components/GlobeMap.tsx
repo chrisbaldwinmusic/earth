@@ -118,8 +118,8 @@ export default function GlobeMap() {
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/standard',
       projection: 'globe',
-      zoom: 11,
-      center: [-1.637, 52.802],
+      zoom: 15,
+      center: [-1.63016, 52.8017], // Sonic Boom Festival Mainstage, Burton Market Square
     })
 
     map.current.on('style.load', () => {
@@ -284,6 +284,19 @@ export default function GlobeMap() {
       toGeoJSON(filteredEvents),
     )
   }, [filteredEvents, mapReady])
+
+  // ── Auto-open the festival mainstage event on first load ───────────────────
+  const autoSelectedRef = useRef(false)
+  useEffect(() => {
+    if (autoSelectedRef.current || !mapReady || allEvents.length === 0) return
+    const mainstage = allEvents.find(
+      (e) => e.name === 'Mainstage' && e.venue === 'Burton Market Square',
+    )
+    if (mainstage) {
+      setSelectedEvent(mainstage)
+      autoSelectedRef.current = true
+    }
+  }, [mapReady, allEvents])
 
   // ── Detail panel: close on outside mousedown ──────────────────────────────
   useEffect(() => {
