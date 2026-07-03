@@ -7,7 +7,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const db = getDb()
-  const { results } = await db.prepare('SELECT * FROM events ORDER BY date ASC').all<EventRow>()
+  const { results } = await db
+    .prepare("SELECT * FROM events WHERE status = 'approved' ORDER BY date ASC")
+    .all<EventRow>()
   return Response.json(results.map(rowToMapEvent))
 }
 
@@ -69,8 +71,8 @@ export async function POST(request: Request) {
   const db = getDb()
   await db
     .prepare(
-      `INSERT INTO events (id, name, venue, city, country, genre, date, lat, lng, source, ticket_link, website_link, lineup, edit_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', ?, ?, ?, ?)`,
+      `INSERT INTO events (id, name, venue, city, country, genre, date, lat, lng, source, status, ticket_link, website_link, lineup, edit_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 'pending', ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -102,6 +104,7 @@ export async function POST(request: Request) {
         lat,
         lng,
         source: 'user',
+        status: 'pending',
         ticketLink: isNonEmptyString(ticketLink) ? ticketLink : undefined,
         websiteLink: isNonEmptyString(websiteLink) ? websiteLink : undefined,
         lineup: lineupJson ? JSON.parse(lineupJson) : undefined,

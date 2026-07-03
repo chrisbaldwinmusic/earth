@@ -14,6 +14,7 @@ export interface MapEvent {
   lat: number
   lng: number
   source: 'seeded' | 'user' | 'ticketmaster'
+  status?: 'pending' | 'approved'
   ticketLink?: string
   websiteLink?: string
   lineup?: LineupEntry[]

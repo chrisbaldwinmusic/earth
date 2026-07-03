@@ -20,6 +20,7 @@ export interface EventRow {
   lat: number
   lng: number
   source: 'seeded' | 'user' | 'ticketmaster'
+  status: 'pending' | 'approved'
   ticket_link: string | null
   website_link: string | null
   lineup: string | null
@@ -39,6 +40,7 @@ export function rowToMapEvent(row: EventRow): MapEvent {
     lat: row.lat,
     lng: row.lng,
     source: row.source,
+    status: row.status,
     ticketLink: row.ticket_link ?? undefined,
     websiteLink: row.website_link ?? undefined,
     lineup: row.lineup ? (JSON.parse(row.lineup) as LineupEntry[]) : undefined,
