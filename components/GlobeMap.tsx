@@ -13,6 +13,20 @@ import type { LineupEntry, MapEvent } from '@/types/events'
 // proving ownership without requiring accounts. Events themselves now live in D1.
 const EDIT_TOKENS_KEY = 'sb-music-map-edit-tokens'
 
+// Sonic Boom Festival stage ids — matched by id (not name) since names get
+// edited via /admin over time. These get the 💥 emoji pin; everything else
+// keeps the plain circle marker.
+const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
+const FESTIVAL_STAGE_IDS = [
+  MAINSTAGE_ID,
+  '3ec412fc-6b1e-40b3-aec4-9a85d49bc392', // The Brewers / Market Hall Stage
+  '11371a92-be0c-46dd-9d0a-f9b04d64cb0e', // EMOM
+  '61cf99c9-887a-4e49-98fb-5d3218523486', // Arcadia
+  '3e33eed6-f342-49fe-ab7f-1402b2503757', // Rock Bar
+  '4ee08f88-fc1a-4736-a5fc-d6964c67d424', // Barrel
+  '351b8395-ce3b-4a4a-ba65-0e4d33a0b78d', // BBC Introducing
+]
+
 function loadEditTokens(): Record<string, string> {
   try {
     const raw = localStorage.getItem(EDIT_TOKENS_KEY)
@@ -33,7 +47,10 @@ function createEmojiIcon(emoji: string, size = 64): ImageData {
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')!
-  ctx.font = `${size * 0.8}px sans-serif`
+  // Canvas fillText doesn't fall back across a font stack per-character like
+  // CSS does — the platform's color-emoji font must be named explicitly or it
+  // silently substitutes a monochrome tofu glyph in the current fillStyle (black).
+  ctx.font = `${size * 0.8}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(emoji, size / 2, size / 2 + size * 0.05)
@@ -57,6 +74,7 @@ function toGeoJSON(events: MapEvent[]) {
         lat: e.lat,
         lng: e.lng,
         source: e.source,
+        isFestival: FESTIVAL_STAGE_IDS.includes(e.id),
         ticketLink: e.ticketLink ?? null,
         websiteLink: e.websiteLink ?? null,
         lineup: e.lineup ? JSON.stringify(e.lineup) : null,
@@ -213,16 +231,37 @@ export default function GlobeMap() {
         },
       })
 
-      // Individual unclustered points — rendered as a 💥 emoji icon
+      // Individual unclustered points — plain circle for everything...
       m.addLayer({
         id: 'unclustered-point',
+        type: 'circle',
+        source: 'events',
+        slot: 'top',
+        filter: ['all', ['!', ['has', 'point_count']], ['!', ['get', 'isFestival']]],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': ['match', ['get', 'source'], 'user', '#C8102E', '#ffffff'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': [
+            'match',
+            ['get', 'source'],
+            'user',
+            '#ff6b6b',
+            'rgba(255,255,255,0.45)',
+          ],
+        },
+      })
+
+      // ...except Sonic Boom Festival stages, which get a 💥 emoji icon
+      m.addLayer({
+        id: 'unclustered-point-emoji',
         type: 'symbol',
         source: 'events',
         slot: 'top',
-        filter: ['!', ['has', 'point_count']],
+        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isFestival']],
         layout: {
           'icon-image': 'event-pin',
-          'icon-size': 0.4,
+          'icon-size': 1.2,
           'icon-allow-overlap': true,
         },
       })
@@ -245,7 +284,7 @@ export default function GlobeMap() {
       })
 
       // ── Click: individual point ─────────────────────────────────────────
-      m.on('click', 'unclustered-point', (e) => {
+      const handlePointClick = (e: mapboxgl.MapMouseEvent) => {
         const props = e.features?.[0]?.properties
         if (!props) return
         setSelectedEvent({
@@ -263,10 +302,12 @@ export default function GlobeMap() {
           websiteLink: props.websiteLink ?? undefined,
           lineup: props.lineup ? (JSON.parse(props.lineup) as LineupEntry[]) : undefined,
         })
-      })
+      }
+      m.on('click', 'unclustered-point', handlePointClick)
+      m.on('click', 'unclustered-point-emoji', handlePointClick)
 
       // ── Cursor: pointer on interactive layers ───────────────────────────
-      ;(['clusters', 'unclustered-point'] as const).forEach((layer) => {
+      ;(['clusters', 'unclustered-point', 'unclustered-point-emoji'] as const).forEach((layer) => {
         m.on('mouseenter', layer, () => { m.getCanvas().style.cursor = 'pointer' })
         m.on('mouseleave', layer, () => { m.getCanvas().style.cursor = '' })
       })
@@ -274,7 +315,7 @@ export default function GlobeMap() {
       // ── Click: empty map → add-event modal ─────────────────────────────
       m.on('click', (e) => {
         const hit = m.queryRenderedFeatures(e.point, {
-          layers: ['clusters', 'unclustered-point'],
+          layers: ['clusters', 'unclustered-point', 'unclustered-point-emoji'],
         })
         if (hit.length === 0) {
           setPendingLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng })
@@ -296,22 +337,6 @@ export default function GlobeMap() {
       toGeoJSON(filteredEvents),
     )
   }, [filteredEvents, mapReady])
-
-  // ── Sonic Boom Festival stages ───────────────────────────────────────────
-  // Matched by id (not name) since names get edited via /admin over time.
-  const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
-  const FESTIVAL_STAGE_IDS = useMemo(
-    () => [
-      MAINSTAGE_ID,
-      '3ec412fc-6b1e-40b3-aec4-9a85d49bc392', // Market Hall
-      '11371a92-be0c-46dd-9d0a-f9b04d64cb0e', // EMOM
-      '61cf99c9-887a-4e49-98fb-5d3218523486', // Arcadia
-      '3e33eed6-f342-49fe-ab7f-1402b2503757', // Rock Bar
-      '4ee08f88-fc1a-4736-a5fc-d6964c67d424', // Barrel
-      '351b8395-ce3b-4a4a-ba65-0e4d33a0b78d', // BBC Introducing
-    ],
-    [],
-  )
 
   // ── Auto-open the Mainstage event on first load ─────────────────────────
   const autoSelectedRef = useRef(false)
