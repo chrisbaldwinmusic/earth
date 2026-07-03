@@ -26,6 +26,20 @@ function saveEditTokens(tokens: Record<string, string>) {
   localStorage.setItem(EDIT_TOKENS_KEY, JSON.stringify(tokens))
 }
 
+// Renders an emoji to raster ImageData via canvas so it can be used as a Mapbox
+// GL icon-image — text-field/text-font symbol layers can't render color emoji.
+function createEmojiIcon(emoji: string, size = 64): ImageData {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.font = `${size * 0.8}px sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(emoji, size / 2, size / 2 + size * 0.05)
+  return ctx.getImageData(0, 0, size, size)
+}
+
 function toGeoJSON(events: MapEvent[]) {
   return {
     type: 'FeatureCollection' as const,
@@ -141,6 +155,10 @@ export default function GlobeMap() {
       const m = map.current
       if (!m) return
 
+      if (!m.hasImage('event-pin')) {
+        m.addImage('event-pin', createEmojiIcon('💥'), { pixelRatio: 2 })
+      }
+
       // ── GeoJSON source with clustering ──────────────────────────────────
       m.addSource('events', {
         type: 'geojson',
@@ -195,24 +213,17 @@ export default function GlobeMap() {
         },
       })
 
-      // Individual unclustered points
+      // Individual unclustered points — rendered as a 💥 emoji icon
       m.addLayer({
         id: 'unclustered-point',
-        type: 'circle',
+        type: 'symbol',
         source: 'events',
         slot: 'top',
         filter: ['!', ['has', 'point_count']],
-        paint: {
-          'circle-radius': 5,
-          'circle-color': ['match', ['get', 'source'], 'user', '#C8102E', '#ffffff'],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': [
-            'match',
-            ['get', 'source'],
-            'user',
-            '#ff6b6b',
-            'rgba(255,255,255,0.45)',
-          ],
+        layout: {
+          'icon-image': 'event-pin',
+          'icon-size': 0.4,
+          'icon-allow-overlap': true,
         },
       })
 
