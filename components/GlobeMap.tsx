@@ -118,8 +118,9 @@ export default function GlobeMap() {
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/standard',
       projection: 'globe',
-      zoom: 15,
-      center: [-1.63016, 52.8017], // Sonic Boom Festival Mainstage, Burton Market Square
+      // Fallback framing until the festival-stage bounds are fit below (once events load).
+      zoom: 13,
+      center: [-1.637, 52.8],
     })
 
     map.current.on('style.load', () => {
@@ -285,9 +286,23 @@ export default function GlobeMap() {
     )
   }, [filteredEvents, mapReady])
 
-  // ── Auto-open the Sonic Boom Festival Mainstage event on first load ────────
-  // Matched by id (not name) since the name gets edited via /admin over time.
+  // ── Sonic Boom Festival stages ───────────────────────────────────────────
+  // Matched by id (not name) since names get edited via /admin over time.
   const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
+  const FESTIVAL_STAGE_IDS = useMemo(
+    () => [
+      MAINSTAGE_ID,
+      '3ec412fc-6b1e-40b3-aec4-9a85d49bc392', // Market Hall
+      '11371a92-be0c-46dd-9d0a-f9b04d64cb0e', // EMOM
+      '61cf99c9-887a-4e49-98fb-5d3218523486', // Arcadia
+      '3e33eed6-f342-49fe-ab7f-1402b2503757', // Rock Bar
+      '4ee08f88-fc1a-4736-a5fc-d6964c67d424', // Barrel
+      '351b8395-ce3b-4a4a-ba65-0e4d33a0b78d', // BBC Introducing
+    ],
+    [],
+  )
+
+  // ── Auto-open the Mainstage event on first load ─────────────────────────
   const autoSelectedRef = useRef(false)
   useEffect(() => {
     if (autoSelectedRef.current || !mapReady || allEvents.length === 0) return
@@ -297,6 +312,20 @@ export default function GlobeMap() {
       autoSelectedRef.current = true
     }
   }, [mapReady, allEvents])
+
+  // ── Frame the initial camera around every festival stage ────────────────
+  const boundsFitRef = useRef(false)
+  useEffect(() => {
+    if (boundsFitRef.current || !mapReady || !map.current || allEvents.length === 0) return
+    const stages = allEvents.filter((e) => FESTIVAL_STAGE_IDS.includes(e.id))
+    if (stages.length === 0) return
+    const bounds = stages.reduce(
+      (b, e) => b.extend([e.lng, e.lat] as [number, number]),
+      new mapboxgl.LngLatBounds([stages[0].lng, stages[0].lat], [stages[0].lng, stages[0].lat]),
+    )
+    map.current.fitBounds(bounds, { padding: 80, duration: 0 })
+    boundsFitRef.current = true
+  }, [mapReady, allEvents, FESTIVAL_STAGE_IDS])
 
   // ── Detail panel: close on outside mousedown ──────────────────────────────
   useEffect(() => {
