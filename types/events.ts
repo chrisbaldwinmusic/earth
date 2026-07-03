@@ -13,7 +13,7 @@ export interface MapEvent {
   date: string
   lat: number
   lng: number
-  source: 'seeded' | 'user' | 'ticketmaster'
+  source: 'seeded' | 'user' | 'ticketmaster' | 'skiddle'
   status?: 'pending' | 'approved'
   ticketLink?: string
   websiteLink?: string

@@ -1,5 +1,5 @@
 const VALID_GENRES = new Set([
-  'Rock', 'Electronic', 'Folk', 'Jazz', 'Classical',
+  'Rock', 'Electronic', 'Folk', 'Country', 'Jazz', 'Classical',
   'Hip-Hop', 'Pop', 'Metal', 'World',
 ])
 
@@ -9,7 +9,6 @@ const OVERRIDES: Record<string, string> = {
   'Indie': 'Rock',
   'Punk': 'Rock',
   'Hard Rock': 'Rock',
-  'Country': 'Folk',
   'Bluegrass': 'Folk',
   'Blues': 'Folk',
   'R&B': 'Pop',
