@@ -6,15 +6,12 @@ new UK grassroots/local music events directly into the shared `earth-events` D1 
 to). Deduplicates against existing rows via `external_id`, prefixed `skiddle:` to keep
 that namespace disjoint from Ticketmaster's unprefixed ids in the shared unique index.
 
-**Status: scaffolded, not yet functional.** `src/index.ts`'s `transformEvent` is a
-placeholder — Skiddle's actual response JSON shape isn't confirmed yet. Get a free API
-key at https://www.skiddle.com/api/join.php (non-commercial use only per their terms —
-worth a quick sanity email to dev@skiddle.com given this is a CIC's site), then do one
-live test call to inspect a real response before finishing the field mapping:
-
-```bash
-curl "https://www.skiddle.com/api/v1/events/search/?api_key=YOUR_KEY&country=GB&eventcode=LIVE&limit=5"
-```
+Queries `eventcode=LIVE,CLUB,FEST` nationwide (`country=GB`, no lat/lng radius — matching
+`earth-ticketmaster-cron`'s no-location-filter precedent). Note: Skiddle's search results
+carry no structured genre field (only `EventCode`, a coarse event-type, plus free-text
+`eventname`/`description`) — every Skiddle-sourced event lands with `genre: 'Other'` for
+now. `genre-map.ts` is kept as a real function rather than deleted, in case a genre signal
+turns up in a future response inspection.
 
 ## Local dev
 
@@ -28,8 +25,13 @@ Run it:
 
 ```bash
 npx wrangler dev
-curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+2,14+*+*+*"
+curl "http://localhost:8787/cdn-cgi/handler/scheduled"
 ```
+
+Local `wrangler dev` uses its own isolated local D1 state (per-directory, not shared with
+the root app's or `earth-ticketmaster-cron`'s local D1) — apply all `migrations/*.sql`
+files against it first via `wrangler d1 execute earth-events --local --file=...` in order,
+or the scheduled handler will fail with `no such table: events`.
 
 ## Deploy
 

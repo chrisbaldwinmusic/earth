@@ -1,17 +1,26 @@
-// NB: transformEvent below should call mapGenre from './genre-map' once its
-// field mapping is filled in — not imported yet since it's currently unused.
+import { mapGenre } from './genre-map'
 
 const SKIDDLE_BASE = 'https://www.skiddle.com/api/v1/events/search/'
 
-// TODO once we have a real API key and can inspect a live response: confirm
-// actual field names/nesting below. This interface is a placeholder based on
-// documented request params only — the response shape is unconfirmed.
+// Confirmed against a live response (2026-07-03). Skiddle exposes many more
+// fields than this; only what we use is typed here.
+interface SkiddleVenue {
+  name?: string
+  town?: string
+  latitude?: number
+  longitude?: number
+}
+
 interface SkiddleEvent {
   id: string
+  eventname: string
+  cancelled?: string // '0' | '1'
+  startdate?: string // ISO 8601 with explicit offset, e.g. '2026-07-03T18:00:00+00:00'
+  venue?: SkiddleVenue
+  link?: string
 }
 
 interface SkiddlePage {
-  // TODO: confirm pagination metadata field name(s), e.g. totalcount / total
   results?: SkiddleEvent[]
 }
 
@@ -32,7 +41,7 @@ async function fetchPage(apiKey: string, offset: number, limit: number): Promise
   const params = new URLSearchParams({
     api_key: apiKey,
     country: 'GB',
-    eventcode: 'LIVE', // TODO: confirm whether CLUB/FEST should also be included
+    eventcode: 'LIVE,CLUB,FEST',
     limit: String(limit),
     offset: String(offset),
   })
@@ -41,10 +50,33 @@ async function fetchPage(apiKey: string, offset: number, limit: number): Promise
   return res.json()
 }
 
-// TODO once we have a real API key and can inspect a live response: this is a
-// placeholder skeleton — field names below are not confirmed.
-function transformEvent(_ev: SkiddleEvent): TransformedEvent | null {
-  throw new Error('not implemented — pending live Skiddle API response inspection')
+function transformEvent(ev: SkiddleEvent): TransformedEvent | null {
+  if (ev.cancelled && ev.cancelled !== '0') return null
+
+  const lat = ev.venue?.latitude
+  const lng = ev.venue?.longitude
+  const date = ev.startdate ? new Date(ev.startdate).toISOString() : null
+
+  if (!date || typeof lat !== 'number' || typeof lng !== 'number') return null
+
+  return {
+    name: ev.eventname,
+    venue: ev.venue?.name ?? '',
+    city: ev.venue?.town ?? '',
+    // Skiddle's venue object only exposes an ISO country code ('GB'), and we
+    // always query country=GB, so this is hardcoded rather than looked up.
+    country: 'United Kingdom',
+    // Skiddle's LIVE/CLUB/FEST results carry no structured genre field (only
+    // EventCode, a coarse event-type, and free-text description/eventname) —
+    // unlike Ticketmaster's classifications. Genre-map is a no-op for now;
+    // every Skiddle event lands as 'Other' until/unless a genre signal shows up.
+    genre: mapGenre(undefined),
+    date,
+    lat,
+    lng,
+    ticketUrl: ev.link ?? '',
+    externalId: ev.id,
+  }
 }
 
 async function run(env: Env): Promise<{ inserted: number; skipped: number }> {

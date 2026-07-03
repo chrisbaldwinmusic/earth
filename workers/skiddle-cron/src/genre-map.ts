@@ -4,9 +4,12 @@ const VALID_GENRES = new Set([
 ])
 
 // Maps Skiddle genre/category values to the app's genre list.
-// TODO: populate once a real API response shows what genre vocabulary Skiddle
-// actually exposes (likely free-text artist genre tags, not a controlled
-// vocabulary like Ticketmaster's classifications).
+// Confirmed against a live response (2026-07-03): Skiddle's LIVE/CLUB/FEST
+// event search results carry no structured genre field at all — only
+// EventCode (a coarse event-type: LIVE/CLUB/FEST/etc, not a music genre) and
+// free-text eventname/description. So this always returns 'Other' for now;
+// left as a real function (not a constant) in case a genre signal turns up
+// in a future response inspection or a different Skiddle endpoint.
 const OVERRIDES: Record<string, string> = {}
 
 export function mapGenre(skiddleGenre: string | undefined): string {
