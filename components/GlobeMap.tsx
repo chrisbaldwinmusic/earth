@@ -184,6 +184,11 @@ export default function GlobeMap() {
         cluster: true,
         clusterMaxZoom: 14,
         clusterRadius: 50,
+        // Default maxzoom (18) is lower than the zoom the festival-stage
+        // fitBounds already lands on — past it Mapbox overzooms the last
+        // generated tile instead of retiling, and pins near that tile's edge
+        // fall outside its buffer and vanish. Push it past any zoom we use.
+        maxzoom: 22,
       })
 
       // Cluster circles — radius scales with point_count
