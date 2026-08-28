@@ -14,11 +14,11 @@ import type { LineupEntry, MapEvent } from '@/types/events'
 const EDIT_TOKENS_KEY = 'sb-music-map-edit-tokens'
 
 // Sonic Boom Festival stage ids — matched by id (not name) since names get
-// edited via /admin over time. These get the 💥 emoji pin; everything else
-// keeps the plain circle marker.
+// edited via /admin over time. The mainstage gets a star pin, the remaining
+// festival stages ("aftershocks") get a diamond pin, and everything else
+// falls back to a plain circle unless it's a community-submitted event.
 const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
-const FESTIVAL_STAGE_IDS = [
-  MAINSTAGE_ID,
+const AFTERSHOCK_STAGE_IDS = [
   '3ec412fc-6b1e-40b3-aec4-9a85d49bc392', // The Brewers / Market Hall Stage
   '11371a92-be0c-46dd-9d0a-f9b04d64cb0e', // EMOM
   '61cf99c9-887a-4e49-98fb-5d3218523486', // Arcadia
@@ -26,6 +26,7 @@ const FESTIVAL_STAGE_IDS = [
   '4ee08f88-fc1a-4736-a5fc-d6964c67d424', // Barrel
   '351b8395-ce3b-4a4a-ba65-0e4d33a0b78d', // BBC Introducing
 ]
+const FESTIVAL_STAGE_IDS = [MAINSTAGE_ID, ...AFTERSHOCK_STAGE_IDS]
 
 function loadEditTokens(): Record<string, string> {
   try {
@@ -40,50 +41,112 @@ function saveEditTokens(tokens: Record<string, string>) {
   localStorage.setItem(EDIT_TOKENS_KEY, JSON.stringify(tokens))
 }
 
-// Renders an emoji to raster ImageData via canvas so it can be used as a Mapbox
-// GL icon-image — text-field/text-font symbol layers can't render color emoji.
-function createEmojiIcon(emoji: string, size = 64): ImageData {
+// Vector pin icons drawn straight to canvas (no emoji) so each event category
+// gets its own shape + colour as a Mapbox GL icon-image.
+function createStarIcon(size = 64): ImageData {
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')!
-  // Canvas fillText doesn't fall back across a font stack per-character like
-  // CSS does — the platform's color-emoji font must be named explicitly or it
-  // silently substitutes a monochrome tofu glyph in the current fillStyle (black).
-  ctx.font = `${size * 0.8}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(emoji, size / 2, size / 2 + size * 0.05)
+  const cx = size / 2
+  const cy = size / 2
+  const outerR = size * 0.42
+  const innerR = size * 0.18
+  ctx.beginPath()
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outerR : innerR
+    const angle = (Math.PI / 5) * i - Math.PI / 2
+    const x = cx + r * Math.cos(angle)
+    const y = cy + r * Math.sin(angle)
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.fillStyle = '#FFC53D'
+  ctx.fill()
+  ctx.lineWidth = size * 0.06
+  ctx.strokeStyle = '#8a5a00'
+  ctx.stroke()
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function createDiamondIcon(size = 64): ImageData {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const cx = size / 2
+  const cy = size / 2
+  const r = size * 0.36
+  ctx.beginPath()
+  ctx.moveTo(cx, cy - r)
+  ctx.lineTo(cx + r, cy)
+  ctx.lineTo(cx, cy + r)
+  ctx.lineTo(cx - r, cy)
+  ctx.closePath()
+  ctx.fillStyle = '#A855F7'
+  ctx.fill()
+  ctx.lineWidth = size * 0.06
+  ctx.strokeStyle = '#4c1d78'
+  ctx.stroke()
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function createRingIcon(size = 64): ImageData {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const cx = size / 2
+  const cy = size / 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, size * 0.34, 0, Math.PI * 2)
+  ctx.fillStyle = '#2DD4BF'
+  ctx.fill()
+  ctx.lineWidth = size * 0.08
+  ctx.strokeStyle = '#0f766e'
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(cx, cy, size * 0.12, 0, Math.PI * 2)
+  ctx.fillStyle = '#0f766e'
+  ctx.fill()
   return ctx.getImageData(0, 0, size, size)
 }
 
 function toGeoJSON(events: MapEvent[]) {
   return {
     type: 'FeatureCollection' as const,
-    features: events.map((e) => ({
-      type: 'Feature' as const,
-      geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] as [number, number] },
-      properties: {
-        id: e.id,
-        name: e.name,
-        venue: e.venue,
-        city: e.city,
-        country: e.country,
-        genre: e.genre,
-        date: e.date,
-        lat: e.lat,
-        lng: e.lng,
-        source: e.source,
-        isFestival: FESTIVAL_STAGE_IDS.includes(e.id),
-        ticketLink: e.ticketLink ?? null,
-        websiteLink: e.websiteLink ?? null,
-        lineup: e.lineup ? JSON.stringify(e.lineup) : null,
-      },
-    })),
+    features: events.map((e) => {
+      const isMainstage = e.id === MAINSTAGE_ID
+      const isAftershock = !isMainstage && AFTERSHOCK_STAGE_IDS.includes(e.id)
+      const isCommunity = !isMainstage && !isAftershock && e.source === 'user'
+      return {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] as [number, number] },
+        properties: {
+          id: e.id,
+          name: e.name,
+          venue: e.venue,
+          city: e.city,
+          country: e.country,
+          genre: e.genre,
+          date: e.date,
+          lat: e.lat,
+          lng: e.lng,
+          source: e.source,
+          isMainstage,
+          isAftershock,
+          isCommunity,
+          ticketLink: e.ticketLink ?? null,
+          websiteLink: e.websiteLink ?? null,
+          lineup: e.lineup ? JSON.stringify(e.lineup) : null,
+        },
+      }
+    }),
   }
 }
 
-export default function GlobeMap() {
+export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = {}) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
   const [mapReady, setMapReady] = useState(false)
@@ -173,8 +236,14 @@ export default function GlobeMap() {
       const m = map.current
       if (!m) return
 
-      if (!m.hasImage('event-pin')) {
-        m.addImage('event-pin', createEmojiIcon('💥'), { pixelRatio: 2 })
+      if (!m.hasImage('pin-mainstage')) {
+        m.addImage('pin-mainstage', createStarIcon(), { pixelRatio: 2 })
+      }
+      if (!m.hasImage('pin-aftershock')) {
+        m.addImage('pin-aftershock', createDiamondIcon(), { pixelRatio: 2 })
+      }
+      if (!m.hasImage('pin-community')) {
+        m.addImage('pin-community', createRingIcon(), { pixelRatio: 2 })
       }
 
       // ── GeoJSON source with clustering ──────────────────────────────────
@@ -236,13 +305,20 @@ export default function GlobeMap() {
         },
       })
 
-      // Individual unclustered points — plain circle for everything...
+      // Individual unclustered points — plain circle for everything except the
+      // three special categories below (mainstage / aftershock / community).
       m.addLayer({
         id: 'unclustered-point',
         type: 'circle',
         source: 'events',
         slot: 'top',
-        filter: ['all', ['!', ['has', 'point_count']], ['!', ['get', 'isFestival']]],
+        filter: [
+          'all',
+          ['!', ['has', 'point_count']],
+          ['!', ['get', 'isMainstage']],
+          ['!', ['get', 'isAftershock']],
+          ['!', ['get', 'isCommunity']],
+        ],
         paint: {
           'circle-radius': 5,
           'circle-color': ['match', ['get', 'source'], 'user', '#C8102E', '#ffffff'],
@@ -257,18 +333,34 @@ export default function GlobeMap() {
         },
       })
 
-      // ...except Sonic Boom Festival stages, which get a 💥 emoji icon
+      // The Sonic Boom mainstage gets a gold star pin
       m.addLayer({
-        id: 'unclustered-point-emoji',
+        id: 'unclustered-point-mainstage',
         type: 'symbol',
         source: 'events',
         slot: 'top',
-        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isFestival']],
-        layout: {
-          'icon-image': 'event-pin',
-          'icon-size': 1.2,
-          'icon-allow-overlap': true,
-        },
+        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isMainstage']],
+        layout: { 'icon-image': 'pin-mainstage', 'icon-size': 1.3, 'icon-allow-overlap': true },
+      })
+
+      // The remaining festival stages ("aftershocks") get a purple diamond pin
+      m.addLayer({
+        id: 'unclustered-point-aftershock',
+        type: 'symbol',
+        source: 'events',
+        slot: 'top',
+        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isAftershock']],
+        layout: { 'icon-image': 'pin-aftershock', 'icon-size': 1.15, 'icon-allow-overlap': true },
+      })
+
+      // Community-submitted events get a teal ring pin
+      m.addLayer({
+        id: 'unclustered-point-community',
+        type: 'symbol',
+        source: 'events',
+        slot: 'top',
+        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isCommunity']],
+        layout: { 'icon-image': 'pin-community', 'icon-size': 1.1, 'icon-allow-overlap': true },
       })
 
       // ── Click: cluster → fly in to expand ──────────────────────────────
@@ -308,24 +400,31 @@ export default function GlobeMap() {
           lineup: props.lineup ? (JSON.parse(props.lineup) as LineupEntry[]) : undefined,
         })
       }
-      m.on('click', 'unclustered-point', handlePointClick)
-      m.on('click', 'unclustered-point-emoji', handlePointClick)
+      const pointLayers = [
+        'unclustered-point',
+        'unclustered-point-mainstage',
+        'unclustered-point-aftershock',
+        'unclustered-point-community',
+      ] as const
+      pointLayers.forEach((layer) => m.on('click', layer, handlePointClick))
 
       // ── Cursor: pointer on interactive layers ───────────────────────────
-      ;(['clusters', 'unclustered-point', 'unclustered-point-emoji'] as const).forEach((layer) => {
+      ;(['clusters', ...pointLayers] as const).forEach((layer) => {
         m.on('mouseenter', layer, () => { m.getCanvas().style.cursor = 'pointer' })
         m.on('mouseleave', layer, () => { m.getCanvas().style.cursor = '' })
       })
 
-      // ── Click: empty map → add-event modal ─────────────────────────────
-      m.on('click', (e) => {
-        const hit = m.queryRenderedFeatures(e.point, {
-          layers: ['clusters', 'unclustered-point', 'unclustered-point-emoji'],
+      // ── Click: empty map → add-event modal (disabled in read-only embeds) ──
+      if (!readOnly) {
+        m.on('click', (e) => {
+          const hit = m.queryRenderedFeatures(e.point, {
+            layers: ['clusters', ...pointLayers],
+          })
+          if (hit.length === 0) {
+            setPendingLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng })
+          }
         })
-        if (hit.length === 0) {
-          setPendingLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng })
-        }
-      })
+      }
 
       setMapReady(true)
     })
@@ -333,7 +432,7 @@ export default function GlobeMap() {
     return () => {
       map.current?.remove()
     }
-  }, [token])
+  }, [token, readOnly])
 
   // ── Sync filtered events → GeoJSON source ────────────────────────────────
   useEffect(() => {
@@ -446,28 +545,32 @@ export default function GlobeMap() {
 
   return (
     <>
-      <FilterBar
-        genreFilter={genreFilter}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        hasActiveFilters={hasActiveFilters}
-        onGenreChange={setGenreFilter}
-        onDateFromChange={setDateFrom}
-        onDateToChange={setDateTo}
-        onClear={() => {
-          setGenreFilter('')
-          setDateFrom('')
-          setDateTo('')
-        }}
-        searchSlot={
-          <Search
-            token={token}
-            onFlyTo={(center) => map.current?.flyTo({ center, zoom: 14 })}
+      {!readOnly && (
+        <>
+          <FilterBar
+            genreFilter={genreFilter}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            hasActiveFilters={hasActiveFilters}
+            onGenreChange={setGenreFilter}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onClear={() => {
+              setGenreFilter('')
+              setDateFrom('')
+              setDateTo('')
+            }}
+            searchSlot={
+              <Search
+                token={token}
+                onFlyTo={(center) => map.current?.flyTo({ center, zoom: 14 })}
+              />
+            }
           />
-        }
-      />
 
-      <InfoPanel />
+          <InfoPanel />
+        </>
+      )}
 
       {loading && allEvents.length === 0 && !loadError && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 bg-zinc-900/90 text-zinc-300 text-sm px-4 py-2 rounded-lg shadow-lg">
@@ -486,7 +589,7 @@ export default function GlobeMap() {
 
       <div ref={mapContainer} style={{ width: '100vw', height: '100vh' }} />
 
-      {pendingLocation && (
+      {!readOnly && pendingLocation && (
         <AddEventModal
           lat={pendingLocation.lat}
           lng={pendingLocation.lng}
@@ -498,7 +601,7 @@ export default function GlobeMap() {
         />
       )}
 
-      {pendingEdit && (
+      {!readOnly && pendingEdit && (
         <AddEventModal
           lat={pendingEdit.lat}
           lng={pendingEdit.lng}
@@ -537,7 +640,7 @@ export default function GlobeMap() {
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {selectedEvent.source === 'user' && Boolean(editTokens[selectedEvent.id]) && (
+                {!readOnly && selectedEvent.source === 'user' && Boolean(editTokens[selectedEvent.id]) && (
                   <>
                     <button
                       onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}
@@ -656,22 +759,24 @@ export default function GlobeMap() {
               </div>
             )}
 
-            <div className="mt-4 pt-3 border-t border-zinc-800">
-              <button
-                onClick={() => {
-                  setPendingLocationPrefill({
-                    venue: selectedEvent.venue,
-                    city: selectedEvent.city,
-                    country: selectedEvent.country,
-                  })
-                  setPendingLocation({ lat: selectedEvent.lat, lng: selectedEvent.lng })
-                  setSelectedEvent(null)
-                }}
-                className="text-xs text-zinc-500 hover:text-white transition-colors"
-              >
-                + Add another event at this venue
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="mt-4 pt-3 border-t border-zinc-800">
+                <button
+                  onClick={() => {
+                    setPendingLocationPrefill({
+                      venue: selectedEvent.venue,
+                      city: selectedEvent.city,
+                      country: selectedEvent.country,
+                    })
+                    setPendingLocation({ lat: selectedEvent.lat, lng: selectedEvent.lng })
+                    setSelectedEvent(null)
+                  }}
+                  className="text-xs text-zinc-500 hover:text-white transition-colors"
+                >
+                  + Add another event at this venue
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
