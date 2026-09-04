@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LineupEntry, MapEvent } from '@/types/events'
 import { GENRES } from '@/lib/genres'
+import EmbedButton from './EmbedButton'
 
 const PASSWORD_KEY = 'sb-music-map-admin-password'
 
@@ -454,12 +455,15 @@ export default function AdminPanel() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-white text-xl font-semibold">Event moderation</h1>
-          <button
-            onClick={handleLogout}
-            className="text-zinc-500 hover:text-white text-sm transition-colors"
-          >
-            Log out
-          </button>
+          <div className="flex items-center gap-4">
+            <EmbedButton className="text-xs px-2.5 py-1.5 rounded-md border border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-white transition-colors" />
+            <button
+              onClick={handleLogout}
+              className="text-zinc-500 hover:text-white text-sm transition-colors"
+            >
+              Log out
+            </button>
+          </div>
         </div>
 
         <input

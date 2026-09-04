@@ -25,3 +25,6 @@ node_modules
 .open-next/
 .wrangler/
 .dev.vars
+
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json

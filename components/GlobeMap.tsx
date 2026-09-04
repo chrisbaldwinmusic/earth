@@ -7,6 +7,8 @@ import AddEventModal from './AddEventModal'
 import FilterBar from './FilterBar'
 import Search from './Search'
 import InfoPanel from './InfoPanel'
+import Legend from './Legend'
+import EmbedButton from './EmbedButton'
 import type { LineupEntry, MapEvent } from '@/types/events'
 
 // Maps event id -> the secret returned when this browser created that event,
@@ -15,8 +17,8 @@ const EDIT_TOKENS_KEY = 'sb-music-map-edit-tokens'
 
 // Sonic Boom Festival stage ids — matched by id (not name) since names get
 // edited via /admin over time. The mainstage gets a star pin, the remaining
-// festival stages ("aftershocks") get a diamond pin, and everything else
-// falls back to a plain circle unless it's a community-submitted event.
+// festival stages ("aftershocks") get a diamond pin, and every other event
+// (independent) gets a plain teal circle. See the Legend component.
 const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
 const AFTERSHOCK_STAGE_IDS = [
   '3ec412fc-6b1e-40b3-aec4-9a85d49bc392', // The Brewers / Market Hall Stage
@@ -92,34 +94,16 @@ function createDiamondIcon(size = 64): ImageData {
   return ctx.getImageData(0, 0, size, size)
 }
 
-function createRingIcon(size = 64): ImageData {
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')!
-  const cx = size / 2
-  const cy = size / 2
-  ctx.beginPath()
-  ctx.arc(cx, cy, size * 0.34, 0, Math.PI * 2)
-  ctx.fillStyle = '#2DD4BF'
-  ctx.fill()
-  ctx.lineWidth = size * 0.08
-  ctx.strokeStyle = '#0f766e'
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.arc(cx, cy, size * 0.12, 0, Math.PI * 2)
-  ctx.fillStyle = '#0f766e'
-  ctx.fill()
-  return ctx.getImageData(0, 0, size, size)
-}
-
 function toGeoJSON(events: MapEvent[]) {
   return {
     type: 'FeatureCollection' as const,
     features: events.map((e) => {
       const isMainstage = e.id === MAINSTAGE_ID
       const isAftershock = !isMainstage && AFTERSHOCK_STAGE_IDS.includes(e.id)
-      const isCommunity = !isMainstage && !isAftershock && e.source === 'user'
+      // Every pin is exactly one of these three, shown in the map legend:
+      // Sonic Boom's own daytime stage, a Sonic Boom aftershock stage, or an
+      // independent event (Skiddle-ingested or community-submitted alike).
+      const category = isMainstage ? 'mainstage' : isAftershock ? 'aftershock' : 'independent'
       return {
         type: 'Feature' as const,
         geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] as [number, number] },
@@ -134,9 +118,7 @@ function toGeoJSON(events: MapEvent[]) {
           lat: e.lat,
           lng: e.lng,
           source: e.source,
-          isMainstage,
-          isAftershock,
-          isCommunity,
+          category,
           ticketLink: e.ticketLink ?? null,
           websiteLink: e.websiteLink ?? null,
           lineup: e.lineup ? JSON.stringify(e.lineup) : null,
@@ -242,9 +224,6 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
       if (!m.hasImage('pin-aftershock')) {
         m.addImage('pin-aftershock', createDiamondIcon(), { pixelRatio: 2 })
       }
-      if (!m.hasImage('pin-community')) {
-        m.addImage('pin-community', createRingIcon(), { pixelRatio: 2 })
-      }
 
       // ── GeoJSON source with clustering ──────────────────────────────────
       m.addSource('events', {
@@ -272,6 +251,7 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
           'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 30, 25],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ff6b6b',
+          'circle-emissive-strength': 1,
         },
       })
 
@@ -290,7 +270,7 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         paint: { 'text-color': '#ffffff' },
       })
 
-      // Soft glow behind individual points
+      // Soft glow behind individual points, tinted to match each category
       m.addLayer({
         id: 'unclustered-point-glow',
         type: 'circle',
@@ -299,37 +279,35 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': 11,
-          'circle-color': ['match', ['get', 'source'], 'user', '#C8102E', '#ffffff'],
+          'circle-color': [
+            'match',
+            ['get', 'category'],
+            'mainstage',
+            '#FFC53D',
+            'aftershock',
+            '#A855F7',
+            '#2DD4BF',
+          ],
           'circle-opacity': 0.18,
           'circle-blur': 1,
+          'circle-emissive-strength': 1,
         },
       })
 
-      // Individual unclustered points — plain circle for everything except the
-      // three special categories below (mainstage / aftershock / community).
+      // Independent events (Skiddle-ingested or community-submitted alike)
+      // get a plain teal circle — see the map legend for what each pin means.
       m.addLayer({
         id: 'unclustered-point',
         type: 'circle',
         source: 'events',
         slot: 'top',
-        filter: [
-          'all',
-          ['!', ['has', 'point_count']],
-          ['!', ['get', 'isMainstage']],
-          ['!', ['get', 'isAftershock']],
-          ['!', ['get', 'isCommunity']],
-        ],
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'category'], 'independent']],
         paint: {
-          'circle-radius': 5,
-          'circle-color': ['match', ['get', 'source'], 'user', '#C8102E', '#ffffff'],
+          'circle-radius': 6,
+          'circle-color': '#2DD4BF',
           'circle-stroke-width': 2,
-          'circle-stroke-color': [
-            'match',
-            ['get', 'source'],
-            'user',
-            '#ff6b6b',
-            'rgba(255,255,255,0.45)',
-          ],
+          'circle-stroke-color': '#0f766e',
+          'circle-emissive-strength': 1,
         },
       })
 
@@ -339,8 +317,9 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         type: 'symbol',
         source: 'events',
         slot: 'top',
-        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isMainstage']],
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'category'], 'mainstage']],
         layout: { 'icon-image': 'pin-mainstage', 'icon-size': 1.3, 'icon-allow-overlap': true },
+        paint: { 'icon-emissive-strength': 1 },
       })
 
       // The remaining festival stages ("aftershocks") get a purple diamond pin
@@ -349,18 +328,9 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         type: 'symbol',
         source: 'events',
         slot: 'top',
-        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isAftershock']],
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'category'], 'aftershock']],
         layout: { 'icon-image': 'pin-aftershock', 'icon-size': 1.15, 'icon-allow-overlap': true },
-      })
-
-      // Community-submitted events get a teal ring pin
-      m.addLayer({
-        id: 'unclustered-point-community',
-        type: 'symbol',
-        source: 'events',
-        slot: 'top',
-        filter: ['all', ['!', ['has', 'point_count']], ['get', 'isCommunity']],
-        layout: { 'icon-image': 'pin-community', 'icon-size': 1.1, 'icon-allow-overlap': true },
+        paint: { 'icon-emissive-strength': 1 },
       })
 
       // ── Click: cluster → fly in to expand ──────────────────────────────
@@ -404,7 +374,6 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         'unclustered-point',
         'unclustered-point-mainstage',
         'unclustered-point-aftershock',
-        'unclustered-point-community',
       ] as const
       pointLayers.forEach((layer) => m.on('click', layer, handlePointClick))
 
@@ -443,9 +412,10 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
   }, [filteredEvents, mapReady])
 
   // ── Auto-open the Mainstage event on first load ─────────────────────────
+  // Skipped in readOnly (embed) mode — the embed is just the map + legend.
   const autoSelectedRef = useRef(false)
   useEffect(() => {
-    if (autoSelectedRef.current || !mapReady || allEvents.length === 0) return
+    if (readOnly || autoSelectedRef.current || !mapReady || allEvents.length === 0) return
     const mainstage = allEvents.find((e) => e.id === MAINSTAGE_ID)
     if (mainstage) {
       setSelectedEvent(mainstage)
@@ -561,16 +531,21 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
               setDateTo('')
             }}
             searchSlot={
-              <Search
-                token={token}
-                onFlyTo={(center) => map.current?.flyTo({ center, zoom: 14 })}
-              />
+              <>
+                <Search
+                  token={token}
+                  onFlyTo={(center) => map.current?.flyTo({ center, zoom: 14 })}
+                />
+                <EmbedButton />
+              </>
             }
           />
 
           <InfoPanel />
         </>
       )}
+
+      <Legend />
 
       {loading && allEvents.length === 0 && !loadError && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 bg-zinc-900/90 text-zinc-300 text-sm px-4 py-2 rounded-lg shadow-lg">
@@ -614,7 +589,7 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         />
       )}
 
-      {selectedEvent && (
+      {!readOnly && selectedEvent && (
         <div
           ref={panelRef}
           className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-900 border-t border-zinc-700 px-6 pt-5 pb-8 animate-slide-up overflow-y-auto"
