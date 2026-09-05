@@ -11,10 +11,6 @@ import Legend from './Legend'
 import EmbedButton from './EmbedButton'
 import type { LineupEntry, MapEvent } from '@/types/events'
 
-// Maps event id -> the secret returned when this browser created that event,
-// proving ownership without requiring accounts. Events themselves now live in D1.
-const EDIT_TOKENS_KEY = 'sb-music-map-edit-tokens'
-
 // Same key AdminPanel caches its password under — if it's present, this browser
 // is treated as admin and can drag festival-stage pins to reposition them.
 const ADMIN_PASSWORD_KEY = 'sb-music-map-admin-password'
@@ -33,19 +29,6 @@ const AFTERSHOCK_STAGE_IDS = [
   '351b8395-ce3b-4a4a-ba65-0e4d33a0b78d', // BBC Introducing
 ]
 const FESTIVAL_STAGE_IDS = [MAINSTAGE_ID, ...AFTERSHOCK_STAGE_IDS]
-
-function loadEditTokens(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(EDIT_TOKENS_KEY)
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveEditTokens(tokens: Record<string, string>) {
-  localStorage.setItem(EDIT_TOKENS_KEY, JSON.stringify(tokens))
-}
 
 // Vector pin icons drawn straight to canvas (no emoji) so each event category
 // gets its own shape + colour as a Mapbox GL icon-image.
@@ -141,13 +124,11 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
   const [allEvents, setAllEvents] = useState<MapEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [editTokens, setEditTokens] = useState<Record<string, string>>(() => loadEditTokens())
   const [genreFilter, setGenreFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ''
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
   const [pendingEdit, setPendingEdit] = useState<MapEvent | null>(null)
   const [pendingLocationPrefill, setPendingLocationPrefill] = useState<{
     venue: string; city: string; country: string
@@ -487,13 +468,14 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
         m.on('mouseup', endDrag)
       }
 
-      // ── Click: empty map → add-event modal (disabled in read-only embeds) ──
+      // ── Click: empty map → add-event modal (admins only; disabled in read-only embeds) ──
       if (!readOnly) {
         m.on('click', (e) => {
           if (suppressClickRef.current) {
             suppressClickRef.current = false
             return
           }
+          if (!adminPasswordRef.current) return
           const hit = m.queryRenderedFeatures(e.point, {
             layers: ['clusters', ...pointLayers],
           })
@@ -557,44 +539,16 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
     return () => document.removeEventListener('mousedown', handle)
   }, [selectedEvent, pendingLocation])
 
-  // ── Save new/edited user event ────────────────────────────────────────────
-  const handleEventSaved = useCallback((event: MapEvent, editToken?: string) => {
+  // ── Save new/edited event (admin only) ──────────────────────────────────
+  const handleEventSaved = useCallback((event: MapEvent) => {
     setAllEvents((prev) => {
       const exists = prev.some((e) => e.id === event.id)
       return exists ? prev.map((e) => (e.id === event.id ? event : e)) : [...prev, event]
     })
-    if (editToken) {
-      setEditTokens((prev) => {
-        const updated = { ...prev, [event.id]: editToken }
-        saveEditTokens(updated)
-        return updated
-      })
-    }
     setPendingLocation(null)
     setPendingLocationPrefill(null)
     setPendingEdit(null)
   }, [])
-
-  const handleDeleteEvent = useCallback(async (id: string) => {
-    const editToken = editTokens[id]
-    if (!editToken) return
-    try {
-      const res = await fetch(`/api/events/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-Edit-Token': editToken },
-      })
-      if (!res.ok) throw new Error('Failed to delete event')
-      setAllEvents((prev) => prev.filter((e) => e.id !== id))
-      setEditTokens((prev) => {
-        const { [id]: _removed, ...rest } = prev
-        saveEditTokens(rest)
-        return rest
-      })
-      setSelectedEvent(null)
-    } catch {
-      // Leave the panel open and the event in place; user can retry.
-    }
-  }, [editTokens])
 
   const handleAdminDeleteEvent = useCallback(async (id: string) => {
     const pw = adminPasswordRef.current
@@ -644,7 +598,8 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
 
   return (
     <>
-      {!readOnly && (
+      {/* Top bar (filters/search/embed) temporarily hidden — re-enable by uncommenting. */}
+      {false && !readOnly && (
         <>
           <FilterBar
             genreFilter={genreFilter}
@@ -693,29 +648,27 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
 
       <div ref={mapContainer} style={{ width: '100vw', height: '100vh' }} />
 
-      {!readOnly && pendingLocation && (
+      {!readOnly && adminPassword && pendingLocation && (
         <AddEventModal
           lat={pendingLocation.lat}
           lng={pendingLocation.lng}
           token={token}
-          turnstileSiteKey={turnstileSiteKey}
           onSaved={handleEventSaved}
           onClose={() => { setPendingLocation(null); setPendingLocationPrefill(null) }}
           prefillVenue={pendingLocationPrefill ?? undefined}
+          adminPassword={adminPassword}
         />
       )}
 
-      {!readOnly && pendingEdit && (
+      {!readOnly && adminPassword && pendingEdit && (
         <AddEventModal
           lat={pendingEdit.lat}
           lng={pendingEdit.lng}
           token={token}
-          turnstileSiteKey={turnstileSiteKey}
           onSaved={handleEventSaved}
           onClose={() => setPendingEdit(null)}
           initialEvent={pendingEdit}
-          editToken={editTokens[pendingEdit.id]}
-          adminPassword={adminPassword ?? undefined}
+          adminPassword={adminPassword}
         />
       )}
 
@@ -731,7 +684,8 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
                 <h2 className="text-white text-xl font-semibold leading-tight">
                   {selectedEvent.name}
                 </h2>
-                {selectedEvent.source === 'user' && (
+                {/* 'your event' label temporarily hidden — re-enable by uncommenting. */}
+                {false && selectedEvent.source === 'user' && (
                   <span
                     className="shrink-0 text-xs px-2 py-0.5 rounded-full border"
                     style={{
@@ -745,28 +699,22 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {!readOnly &&
-                  (Boolean(adminPassword) ||
-                    (selectedEvent.source === 'user' && Boolean(editTokens[selectedEvent.id]))) && (
-                    <>
-                      <button
-                        onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}
-                        className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() =>
-                          adminPassword
-                            ? handleAdminDeleteEvent(selectedEvent.id)
-                            : handleDeleteEvent(selectedEvent.id)
-                        }
-                        className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-red-900/60 hover:text-red-400 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
+                {!readOnly && Boolean(adminPassword) && (
+                  <>
+                    <button
+                      onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}
+                      className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleAdminDeleteEvent(selectedEvent.id)}
+                      className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-red-900/60 hover:text-red-400 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => setSelectedEvent(null)}
                   className="text-zinc-400 hover:text-white transition-colors mt-0.5"
@@ -870,7 +818,7 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
               </div>
             )}
 
-            {!readOnly && (
+            {!readOnly && Boolean(adminPassword) && (
               <div className="mt-4 pt-3 border-t border-zinc-800">
                 <button
                   onClick={() => {
