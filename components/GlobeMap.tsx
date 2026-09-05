@@ -16,19 +16,23 @@ import type { LineupEntry, MapEvent } from '@/types/events'
 const ADMIN_PASSWORD_KEY = 'sb-music-map-admin-password'
 
 // Sonic Boom Festival stage ids — matched by id (not name) since names get
-// edited via /admin over time. The mainstage gets a star pin, the remaining
-// festival stages ("aftershocks") get a diamond pin, and every other event
-// (independent) gets a plain teal circle. See the Legend component.
-const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
-const AFTERSHOCK_STAGE_IDS = [
+// edited via /admin over time. Daytime stages get a star pin, the evening
+// "aftershock" stages get a diamond pin, and every other event (independent)
+// gets a plain teal circle. See the Legend component.
+const DAYTIME_STAGE_IDS = [
+  '331be109-1510-4690-9d0e-b8fa72a09ba4', // Main Stage
   '3ec412fc-6b1e-40b3-aec4-9a85d49bc392', // The Brewers / Market Hall Stage
+  'f38a705f-b1c4-4d6f-9d64-9a39e4b02797', // Busk Stop
+]
+const AFTERSHOCK_STAGE_IDS = [
   '11371a92-be0c-46dd-9d0a-f9b04d64cb0e', // EMOM
   '61cf99c9-887a-4e49-98fb-5d3218523486', // Arcadia
   '3e33eed6-f342-49fe-ab7f-1402b2503757', // Rock Bar
   '4ee08f88-fc1a-4736-a5fc-d6964c67d424', // Barrel
   '351b8395-ce3b-4a4a-ba65-0e4d33a0b78d', // BBC Introducing
 ]
-const FESTIVAL_STAGE_IDS = [MAINSTAGE_ID, ...AFTERSHOCK_STAGE_IDS]
+const MAINSTAGE_ID = '331be109-1510-4690-9d0e-b8fa72a09ba4'
+const FESTIVAL_STAGE_IDS = [...DAYTIME_STAGE_IDS, ...AFTERSHOCK_STAGE_IDS]
 
 // Vector pin icons drawn straight to canvas (no emoji) so each event category
 // gets its own shape + colour as a Mapbox GL icon-image.
@@ -85,12 +89,12 @@ function toGeoJSON(events: MapEvent[]) {
   return {
     type: 'FeatureCollection' as const,
     features: events.map((e) => {
-      const isMainstage = e.id === MAINSTAGE_ID
-      const isAftershock = !isMainstage && AFTERSHOCK_STAGE_IDS.includes(e.id)
+      const isDaytime = DAYTIME_STAGE_IDS.includes(e.id)
+      const isAftershock = !isDaytime && AFTERSHOCK_STAGE_IDS.includes(e.id)
       // Every pin is exactly one of these three, shown in the map legend:
-      // Sonic Boom's own daytime stage, a Sonic Boom aftershock stage, or an
+      // a Sonic Boom daytime stage, a Sonic Boom aftershock stage, or an
       // independent event (Skiddle-ingested or community-submitted alike).
-      const category = isMainstage ? 'mainstage' : isAftershock ? 'aftershock' : 'independent'
+      const category = isDaytime ? 'mainstage' : isAftershock ? 'aftershock' : 'independent'
       return {
         type: 'Feature' as const,
         geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] as [number, number] },
