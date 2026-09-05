@@ -256,6 +256,7 @@ export default function AdminPanel() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [sourceFilter, setSourceFilter] = useState<'all' | MapEvent['source']>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -409,14 +410,20 @@ export default function AdminPanel() {
 
   const filteredEvents = useMemo(() => {
     if (!events) return []
+    let result = events
+    if (sourceFilter !== 'all') {
+      result = result.filter((e) => e.source === sourceFilter)
+    }
     const q = query.trim().toLowerCase()
-    if (!q) return events
-    return events.filter((e) =>
-      [e.name, e.venue, e.city, e.country, e.genre, e.source].some((field) =>
-        field.toLowerCase().includes(q),
-      ),
-    )
-  }, [events, query])
+    if (q) {
+      result = result.filter((e) =>
+        [e.name, e.venue, e.city, e.country, e.genre, e.source].some((field) =>
+          field.toLowerCase().includes(q),
+        ),
+      )
+    }
+    return result
+  }, [events, query, sourceFilter])
 
   if (!password) {
     return (
@@ -466,17 +473,30 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, venue, city, country, genre, source…"
-          className="w-full bg-zinc-900 border border-zinc-800 text-white text-sm rounded-md px-3 py-2 mb-6 focus:outline-none focus:border-zinc-500"
-        />
+        <div className="flex gap-3 mb-6">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, venue, city, country, genre, source…"
+            className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 text-white text-sm rounded-md px-3 py-2 focus:outline-none focus:border-zinc-500"
+          />
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as typeof sourceFilter)}
+            className="bg-zinc-900 border border-zinc-800 text-white text-sm rounded-md px-3 py-2 focus:outline-none focus:border-zinc-500"
+          >
+            <option value="all">All sources</option>
+            <option value="user">Registered by owners</option>
+            <option value="seeded">Seeded</option>
+            <option value="ticketmaster">Ticketmaster</option>
+            <option value="skiddle">Skiddle</option>
+          </select>
+        </div>
 
         {actionError && <p className="text-red-400 text-sm mb-4">{actionError}</p>}
         {loading && <p className="text-zinc-500 text-sm">Loading…</p>}
-        {!loading && events && query.trim() && (
+        {!loading && events && (query.trim() || sourceFilter !== 'all') && (
           <p className="text-zinc-600 text-xs mb-4">
             {filteredEvents.length} of {events.length} events match
           </p>

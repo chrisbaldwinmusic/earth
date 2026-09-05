@@ -28,6 +28,9 @@ interface Props {
   initialEvent?: MapEvent
   prefillVenue?: { venue: string; city: string; country: string }
   editToken?: string
+  // When set, edits are saved as an admin (any event, not just this browser's
+  // own 'user' submissions) via the admin API instead of the owner edit-token one.
+  adminPassword?: string
 }
 
 const inputClass =
@@ -42,6 +45,7 @@ const labelClass = 'block text-zinc-500 text-xs uppercase tracking-wider mb-1'
 
 export default function AddEventModal({
   lat, lng, token, turnstileSiteKey, onSaved, onClose, initialEvent, prefillVenue, editToken,
+  adminPassword,
 }: Props) {
   const isEditing = Boolean(initialEvent)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -131,11 +135,17 @@ export default function AddEventModal({
     setSubmitting(true)
     try {
       if (isEditing) {
-        const res = await fetch(`/api/events/${initialEvent!.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-Edit-Token': editToken ?? '' },
-          body: JSON.stringify(payload),
-        })
+        const res = adminPassword
+          ? await fetch(`/api/admin/events/${initialEvent!.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
+              body: JSON.stringify(payload),
+            })
+          : await fetch(`/api/events/${initialEvent!.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'X-Edit-Token': editToken ?? '' },
+              body: JSON.stringify(payload),
+            })
         if (!res.ok) throw new Error('Failed to update event')
         onSaved((await res.json()) as MapEvent)
       } else {

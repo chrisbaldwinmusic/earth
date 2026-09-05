@@ -15,6 +15,10 @@ import type { LineupEntry, MapEvent } from '@/types/events'
 // proving ownership without requiring accounts. Events themselves now live in D1.
 const EDIT_TOKENS_KEY = 'sb-music-map-edit-tokens'
 
+// Same key AdminPanel caches its password under — if it's present, this browser
+// is treated as admin and can drag festival-stage pins to reposition them.
+const ADMIN_PASSWORD_KEY = 'sb-music-map-admin-password'
+
 // Sonic Boom Festival stage ids — matched by id (not name) since names get
 // edited via /admin over time. The mainstage gets a star pin, the remaining
 // festival stages ("aftershocks") get a diamond pin, and every other event
@@ -149,6 +153,20 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
     venue: string; city: string; country: string
   } | null>(null)
 
+  // Admin password cached by AdminPanel — presence unlocks dragging pins to
+  // reposition them and editing/deleting any event straight from the map,
+  // not just ones this browser created. Server still checks it on every save.
+  const [adminPassword, setAdminPasswordState] = useState<string | null>(null)
+  const adminPasswordRef = useRef<string | null>(null)
+  const setAdminPassword = useCallback((pw: string | null) => {
+    adminPasswordRef.current = pw
+    setAdminPasswordState(pw)
+  }, [])
+  useEffect(() => {
+    if (readOnly) return
+    setAdminPassword(localStorage.getItem(ADMIN_PASSWORD_KEY))
+  }, [readOnly, setAdminPassword])
+
   const loadEvents = useCallback(async () => {
     setLoading(true)
     setLoadError(false)
@@ -184,6 +202,11 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
   // Keep a ref so the async map.on('load') callback always sees current filtered data
   const filteredEventsRef = useRef(filteredEvents)
   filteredEventsRef.current = filteredEvents
+
+  // Pin-drag state — refs so the map.on('load') callback (mounted once) always
+  // sees the live values without needing to be re-registered.
+  const draggingRef = useRef<{ id: string; didMove: boolean } | null>(null)
+  const suppressClickRef = useRef(false)
 
   // ── Map initialisation ────────────────────────────────────────────────────
   useEffect(() => {
@@ -352,6 +375,10 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
 
       // ── Click: individual point ─────────────────────────────────────────
       const handlePointClick = (e: mapboxgl.MapMouseEvent) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false
+          return
+        }
         const props = e.features?.[0]?.properties
         if (!props) return
         setSelectedEvent({
@@ -379,13 +406,94 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
 
       // ── Cursor: pointer on interactive layers ───────────────────────────
       ;(['clusters', ...pointLayers] as const).forEach((layer) => {
-        m.on('mouseenter', layer, () => { m.getCanvas().style.cursor = 'pointer' })
+        m.on('mouseenter', layer, () => {
+          m.getCanvas().style.cursor = adminPasswordRef.current ? 'grab' : 'pointer'
+        })
         m.on('mouseleave', layer, () => { m.getCanvas().style.cursor = '' })
       })
+
+      // ── Drag: admin repositions a pin (disabled in read-only embeds) ────
+      if (!readOnly) {
+        pointLayers.forEach((layer) => {
+          m.on('mousedown', layer, (e) => {
+            if (!adminPasswordRef.current) return
+            const props = e.features?.[0]?.properties
+            if (!props) return
+            e.preventDefault()
+            draggingRef.current = { id: props.id, didMove: false }
+            m.dragPan.disable()
+            m.getCanvas().style.cursor = 'grabbing'
+          })
+        })
+
+        m.on('mousemove', (e) => {
+          const drag = draggingRef.current
+          if (!drag) return
+          drag.didMove = true
+          const { lng, lat } = e.lngLat
+          const updated = filteredEventsRef.current.map((ev) =>
+            ev.id === drag.id ? { ...ev, lat, lng } : ev,
+          )
+          ;(m.getSource('events') as mapboxgl.GeoJSONSource | undefined)?.setData(toGeoJSON(updated))
+        })
+
+        const endDrag = async (e: mapboxgl.MapMouseEvent) => {
+          const drag = draggingRef.current
+          if (!drag) return
+          draggingRef.current = null
+          m.dragPan.enable()
+          m.getCanvas().style.cursor = adminPasswordRef.current ? 'grab' : ''
+          if (!drag.didMove) return
+          suppressClickRef.current = true
+
+          const original = filteredEventsRef.current.find((ev) => ev.id === drag.id)
+          const pw = adminPasswordRef.current
+          if (!original || !pw) return
+          const { lng, lat } = e.lngLat
+
+          setAllEvents((prev) =>
+            prev.map((ev) => (ev.id === drag.id ? { ...ev, lat, lng } : ev)),
+          )
+
+          try {
+            const res = await fetch(`/api/admin/events/${drag.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+              body: JSON.stringify({
+                name: original.name,
+                venue: original.venue,
+                city: original.city,
+                country: original.country,
+                genre: original.genre,
+                date: original.date,
+                lat,
+                lng,
+                ticketLink: original.ticketLink,
+                websiteLink: original.websiteLink,
+                lineup: original.lineup,
+              }),
+            })
+            if (res.status === 401) {
+              localStorage.removeItem(ADMIN_PASSWORD_KEY)
+              setAdminPassword(null)
+            }
+            if (!res.ok) {
+              setAllEvents((prev) => prev.map((ev) => (ev.id === drag.id ? original : ev)))
+            }
+          } catch {
+            setAllEvents((prev) => prev.map((ev) => (ev.id === drag.id ? original : ev)))
+          }
+        }
+        m.on('mouseup', endDrag)
+      }
 
       // ── Click: empty map → add-event modal (disabled in read-only embeds) ──
       if (!readOnly) {
         m.on('click', (e) => {
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false
+            return
+          }
           const hit = m.queryRenderedFeatures(e.point, {
             layers: ['clusters', ...pointLayers],
           })
@@ -488,6 +596,27 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
     }
   }, [editTokens])
 
+  const handleAdminDeleteEvent = useCallback(async (id: string) => {
+    const pw = adminPasswordRef.current
+    if (!pw) return
+    try {
+      const res = await fetch(`/api/admin/events/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-Admin-Password': pw },
+      })
+      if (res.status === 401) {
+        localStorage.removeItem(ADMIN_PASSWORD_KEY)
+        setAdminPassword(null)
+        return
+      }
+      if (!res.ok) throw new Error('Failed to delete event')
+      setAllEvents((prev) => prev.filter((e) => e.id !== id))
+      setSelectedEvent(null)
+    } catch {
+      // Leave the panel open and the event in place; admin can retry.
+    }
+  }, [setAdminPassword])
+
   const venueKey = (e: MapEvent) =>
     `${e.venue.toLowerCase().trim()}|${e.city.toLowerCase().trim()}`
 
@@ -586,6 +715,7 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
           onClose={() => setPendingEdit(null)}
           initialEvent={pendingEdit}
           editToken={editTokens[pendingEdit.id]}
+          adminPassword={adminPassword ?? undefined}
         />
       )}
 
@@ -615,22 +745,28 @@ export default function GlobeMap({ readOnly = false }: { readOnly?: boolean } = 
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {!readOnly && selectedEvent.source === 'user' && Boolean(editTokens[selectedEvent.id]) && (
-                  <>
-                    <button
-                      onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}
-                      className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteEvent(selectedEvent.id)}
-                      className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-red-900/60 hover:text-red-400 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
+                {!readOnly &&
+                  (Boolean(adminPassword) ||
+                    (selectedEvent.source === 'user' && Boolean(editTokens[selectedEvent.id]))) && (
+                    <>
+                      <button
+                        onClick={() => { setPendingEdit(selectedEvent); setSelectedEvent(null) }}
+                        className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() =>
+                          adminPassword
+                            ? handleAdminDeleteEvent(selectedEvent.id)
+                            : handleDeleteEvent(selectedEvent.id)
+                        }
+                        className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-red-900/60 hover:text-red-400 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 <button
                   onClick={() => setSelectedEvent(null)}
                   className="text-zinc-400 hover:text-white transition-colors mt-0.5"
